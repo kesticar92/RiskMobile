@@ -29,7 +29,7 @@ RiskMobile integra en una sola plataforma:
 | Nombre | Rol |
 |---|---|
 | **Kevin Cardoso** | Desarrollador principal / Arquitectura |
-| **Brandon** | Desarrollador / QA |
+| **Brandon Faruck Villamarin** | Desarrollador / QA |
 
 ---
 
@@ -279,7 +279,7 @@ El sistema genera un indicador interno de perfil financiero (0-100) antes de con
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/kevincardosoe/RiskMobile.git
+git clone https://github.com/kesticar92/RiskMobile.git
 cd RiskMobile
 
 # Instalar dependencias
@@ -310,4 +310,4 @@ flutter run
 
 Proyecto académico — Universidad | Computación Móvil 2026-1
 
-**Desarrollado por Kevin Cardoso y Brandon**
+**Desarrollado por Kevin Cardoso y Brandon Faruck Villamarin**

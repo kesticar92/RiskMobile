@@ -43,3 +43,19 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment and secrets
+*.env
+.env.*
+google-services.json
+GoogleService-Info.plist
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# Podfile lock (platform dependent)
+/ios/Podfile.lock
+
+# Flutter plugins (regenerated on pub get)
+.flutter-plugins
