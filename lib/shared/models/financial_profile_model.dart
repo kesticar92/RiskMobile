@@ -43,7 +43,7 @@ class FinancialProfileModel {
 
   // Cálculos derivados
   double get totalMonthlyPayments =>
-      obligations.fold(0, (sum, o) => sum + o.monthlyPayment);
+      obligations.fold(0, (acc, o) => acc + o.monthlyPayment);
 
   double get debtLevel =>
       monthlyIncome > 0 ? totalMonthlyPayments / monthlyIncome : 0;

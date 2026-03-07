@@ -328,7 +328,7 @@ class _ActivityPage extends StatelessWidget {
               labelText: '¿Cuánto ganas al mes?',
               prefixIcon: Icon(Icons.attach_money),
               hintText: '0',
-              prefixText: '$ ',
+              prefixText: '\$ ',
             ),
           ),
           const SizedBox(height: 24),
@@ -588,7 +588,7 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
             decoration: const InputDecoration(
               labelText: 'Cuota mensual',
               prefixIcon: Icon(Icons.attach_money),
-              prefixText: '$ ',
+              prefixText: '\$ ',
             ),
           ),
           const SizedBox(height: 24),
@@ -649,7 +649,7 @@ class _IntentionPage extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     hintText: 'Ej: 20000000',
-                    prefixText: '$ ',
+                    prefixText: '\$ ',
                     prefixIcon: Icon(Icons.monetization_on_outlined),
                     labelText: 'Valor del crédito que buscas',
                   ),

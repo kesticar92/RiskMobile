@@ -7,6 +7,7 @@ class AppFormatters {
     decimalDigits: 0,
   );
 
+  // ignore: unused_field
   static final _percent = NumberFormat.percentPattern('es_CO');
   static final _dateFormat = DateFormat('dd/MM/yyyy', 'es_CO');
   static final _dateTimeFormat = DateFormat('dd/MM/yyyy HH:mm', 'es_CO');

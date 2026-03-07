@@ -37,9 +37,9 @@ class AppColors {
   static const Color surfaceModal = Color(0xFFFAF5FF);      // Blanco morado muy suave
   
   // Traslúcidos
-  static Color blueTranslucent = const Color(0xFF4FC3F7).withOpacity(0.12);
-  static Color purpleTranslucent = const Color(0xFFCE93D8).withOpacity(0.12);
-  static Color cardTranslucent = Colors.white.withOpacity(0.85);
+  static final Color blueTranslucent = const Color(0xFF4FC3F7).withValues(alpha: 0.12);
+  static final Color purpleTranslucent = const Color(0xFFCE93D8).withValues(alpha: 0.12);
+  static final Color cardTranslucent = Colors.white.withValues(alpha: 0.85);
 
   // Estados y semáforo financiero
   static const Color riskLow = Color(0xFF4CAF50);
@@ -72,7 +72,6 @@ class AppTheme {
         primary: AppColors.primaryBlue,
         secondary: AppColors.secondaryPurple,
         surface: AppColors.background,
-        background: AppColors.background,
       ),
       scaffoldBackgroundColor: AppColors.background,
       textTheme: GoogleFonts.interTextTheme().copyWith(
@@ -205,7 +204,7 @@ class AppTheme {
           fontSize: 14,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(

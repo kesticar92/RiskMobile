@@ -10,7 +10,6 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/financial_profile_model.dart';
 import '../../../../shared/models/user_model.dart';
-import '../../../../shared/widgets/glass_card.dart';
 
 class AdvisorDashboardScreen extends ConsumerStatefulWidget {
   const AdvisorDashboardScreen({super.key});

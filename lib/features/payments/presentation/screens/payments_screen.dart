@@ -177,7 +177,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                               decoration: const InputDecoration(
                                 labelText: 'Valor del crédito aprobado',
                                 prefixIcon: Icon(Icons.account_balance_outlined),
-                                prefixText: '$ ',
+                                prefixText: '\$ ',
                               ),
                               validator: (v) =>
                                   (double.tryParse(v ?? '') ?? 0) > 0
@@ -192,7 +192,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                               decoration: const InputDecoration(
                                 labelText: 'Comisión cobrada',
                                 prefixIcon: Icon(Icons.payments_outlined),
-                                prefixText: '$ ',
+                                prefixText: '\$ ',
                               ),
                               validator: (v) =>
                                   v?.trim().isNotEmpty == true ? null : 'Requerido',
@@ -205,7 +205,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                               decoration: const InputDecoration(
                                 labelText: 'Costos del proceso',
                                 prefixIcon: Icon(Icons.remove_circle_outline),
-                                prefixText: '$ ',
+                                prefixText: '\$ ',
                                 hintText: '0',
                               ),
                             ),
