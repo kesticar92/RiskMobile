@@ -1,7 +1,5 @@
-// IMPORTANTE: Este archivo debe ser generado con FlutterFire CLI:
-//   flutterfire configure
-// Reemplaza los valores con los de tu proyecto Firebase real.
-// Instrucciones: https://firebase.google.com/docs/flutter/setup
+// Firebase configuration for project: riskmobile-c59fc
+// Platforms: Android, iOS, Web
 
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
@@ -17,35 +15,34 @@ class DefaultFirebaseOptions {
         return ios;
       default:
         throw UnsupportedError(
-          'DefaultFirebaseOptions are not supported for this platform.',
+          'DefaultFirebaseOptions not supported for this platform.',
         );
     }
   }
 
-  // ⚠️  REEMPLAZA estos valores con los de tu proyecto Firebase
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: '1:000000000000:android:0000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'riskmobile-app',
-    storageBucket: 'riskmobile-app.appspot.com',
+    apiKey: 'AIzaSyCzhFsk4-Z7CXwJrhSfJsFMvTbGG41SDVE',
+    appId: '1:501384127347:android:9d9bb6fd14b542244e9b06',
+    messagingSenderId: '501384127347',
+    projectId: 'riskmobile-c59fc',
+    storageBucket: 'riskmobile-c59fc.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_IOS_API_KEY',
-    appId: '1:000000000000:ios:0000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'riskmobile-app',
-    storageBucket: 'riskmobile-app.appspot.com',
+    apiKey: 'AIzaSyD-kG7DX_qhac3BrDWDpV_VPQtQq-3IcbU',
+    appId: '1:501384127347:ios:17ed50c85a85273f4e9b06',
+    messagingSenderId: '501384127347',
+    projectId: 'riskmobile-c59fc',
+    storageBucket: 'riskmobile-c59fc.firebasestorage.app',
     iosBundleId: 'com.riskmobile.app',
   );
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_WEB_API_KEY',
-    appId: '1:000000000000:web:0000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'riskmobile-app',
-    storageBucket: 'riskmobile-app.appspot.com',
-    authDomain: 'riskmobile-app.firebaseapp.com',
+    apiKey: 'AIzaSyAstaFax71sjPYMxQnPF6INHyRlS2WdBB8',
+    appId: '1:501384127347:web:dcfb3cfca181fd374e9b06',
+    messagingSenderId: '501384127347',
+    projectId: 'riskmobile-c59fc',
+    storageBucket: 'riskmobile-c59fc.firebasestorage.app',
+    authDomain: 'riskmobile-c59fc.firebaseapp.com',
   );
 }

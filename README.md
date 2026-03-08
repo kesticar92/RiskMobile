@@ -88,69 +88,588 @@ Profesional que gestiona múltiples clientes, analiza perfiles financieros, ofre
 
 ---
 
-## Score RiskMobile
+## Estadísticas del Sistema
 
-El sistema genera un indicador interno de perfil financiero (0-100) antes de consultar centrales de riesgo.
-
-### Fórmula de cálculo
-
-| Factor | Peso |
+| Concepto | Cantidad |
 |---|---|
-| Capacidad de pago | 40% |
-| Nivel de endeudamiento | 30% |
-| Estabilidad laboral | 20% |
-| Historial financiero declarado | 10% |
-
-### Clasificación
-
-| Score | Nivel de Riesgo |
-|---|---|
-| 80 – 100 | Riesgo Bajo |
-| 60 – 79 | Riesgo Medio |
-| 40 – 59 | Riesgo Alto |
-| 0 – 39 | Riesgo Muy Alto |
+| Pantallas diseñadas e implementadas | 16 |
+| Requerimientos funcionales | 38 |
+| Requerimientos no funcionales | 20 |
+| Módulos del sistema | 9 |
+| Roles de usuario | 2 (Cliente / Asesor) |
+| Archivos Dart del proyecto | 28 |
+| Total de campos de entrada (inputs) | 47 |
+| Total de validaciones implementadas | 62 |
+| Tipos de campo utilizados | 8 (texto, email, numérico, contraseña, selector, slider, switch, chat) |
 
 ---
 
-## Requisitos Funcionales
+## Score RiskMobile — Indicador Interno de Perfil Financiero
+
+### Aclaración importante
+
+> **El Score RiskMobile es un indicador meramente informativo y orientativo.** Su propósito es dar al usuario una aproximación del perfil de riesgo que podría estar manejando, con base en la información financiera que él mismo declara dentro de la plataforma. **Este score NO reemplaza ni representa el score real de las centrales de riesgo** (Datacrédito, TransUnion, etc.). Para conocer el score directo de las centrales, el usuario debe realizar el pago correspondiente para consultar directamente en dichas centrales su score propio y su historial crediticio oficial.
+
+### Variables que alimentan el Score RiskMobile
+
+El score se calcula al finalizar la entrevista financiera completa (actividad económica + ingresos + obligaciones). Se basa en 4 variables ponderadas:
+
+| # | Variable | Peso | Qué mide | Cómo se obtiene |
+|---|---|---|---|---|
+| 1 | **Capacidad de pago** | 40% | Cuánto le queda disponible al usuario después de pagar sus cuotas actuales, respecto a su ingreso | Se calcula como `(ingreso × 40% − total_cuotas) / ingreso`. Si le queda ≥40% libre → 100 pts, si ≥30% → 85, si ≥20% → 70, si ≥10% → 50, si ≥0% → 30, si negativo → 0 |
+| 2 | **Nivel de endeudamiento** | 30% | Qué porcentaje de los ingresos ya está comprometido en cuotas | Se calcula como `total_cuotas / ingreso`. Si ≤20% → 100, ≤30% → 85, ≤40% → 65, ≤50% → 40, ≤70% → 20, >70% → 5 |
+| 3 | **Estabilidad laboral** | 20% | Tipo de actividad económica y antigüedad en ella | Según la actividad: Pensionado=95, Empleado=90, Profesional independiente=75, Comerciante=70, Independiente=65. Bonus: +5 si ≥2 años, +5 adicional si ≥4 años |
+| 4 | **Historial financiero declarado** | 10% | Si el usuario tiene o ha tenido obligaciones financieras (experiencia crediticia) | Si declara obligaciones existentes → 80 pts (tiene experiencia crediticia). Si no tiene obligaciones → 60 pts (no tiene historial) |
+
+### Fórmula final
+
+```
+Score RiskMobile = (Capacidad × 0.40) + (Endeudamiento × 0.30) + (Estabilidad × 0.20) + (Historial × 0.10)
+```
+
+El resultado se redondea a un entero entre 0 y 100.
+
+### Clasificación de riesgo
+
+| Rango | Clasificación | Color en la app | Significado |
+|---|---|---|---|
+| 80 – 100 | Riesgo Bajo | Verde (#4CAF50) | Perfil financiero sólido, alta probabilidad de aprobación crediticia |
+| 60 – 79 | Riesgo Medio | Naranja (#FF9800) | Perfil aceptable con áreas de mejora, aprobación posible con condiciones |
+| 40 – 59 | Riesgo Alto | Rojo (#F44336) | Perfil comprometido, se recomienda reducir deuda antes de solicitar crédito |
+| 0 – 39 | Riesgo Muy Alto | Morado (#9C27B0) | Capacidad insuficiente, alta probabilidad de rechazo |
+
+### Ejemplo de cálculo
+
+Un empleado con 24 meses de antigüedad, ingreso de $3.000.000, cuotas mensuales de $600.000 y que declara obligaciones:
+
+- Capacidad de pago: ingreso × 40% = $1.200.000 − $600.000 = $600.000 libre → ratio 20% → **70 pts**
+- Endeudamiento: $600.000 / $3.000.000 = 20% → **100 pts**
+- Estabilidad: Empleado = 90 + bonus 5 (≥24 meses) = **95 pts**
+- Historial: tiene obligaciones → **80 pts**
+
+```
+Score = (70 × 0.40) + (100 × 0.30) + (95 × 0.20) + (80 × 0.10)
+Score = 28 + 30 + 19 + 8 = 85 → Riesgo Bajo ✅
+```
+
+---
+
+## Actividad Económica y Ámbito Laboral
+
+La actividad económica del usuario es fundamental para el cálculo del score porque refleja su estabilidad de ingresos:
+
+| Actividad | Descripción | Puntuación base | Justificación |
+|---|---|---|---|
+| **Empleado** | Persona vinculada laboralmente a una empresa con contrato | 90 | Ingreso estable y predecible, respaldado por nómina |
+| **Independiente** | Persona que trabaja por cuenta propia sin registro formal | 65 | Ingresos variables, sin soporte de nómina |
+| **Pensionado** | Persona que recibe pensión de jubilación | 95 | Ingreso más estable y garantizado del sistema |
+| **Comerciante** | Persona con negocio propio registrado (RUT/Cámara de comercio) | 70 | Ingresos variables pero con soporte de actividad formal |
+| **Profesional independiente** | Profesional titulado que trabaja por honorarios o contrato de prestación de servicios | 75 | Ingresos variables pero con mayor capacidad de generación |
+
+### Tipos de contratación (para empleados)
+
+| Tipo de contrato | Impacto en estabilidad |
+|---|---|
+| Término indefinido | Mayor estabilidad, favorece la evaluación |
+| Término fijo | Estabilidad media, depende de renovación |
+| Prestación de servicios | Menor estabilidad, similar a independiente |
+| Independiente (sin contrato) | Sin vínculo laboral, ingresos no garantizados |
+
+### Antigüedad laboral
+
+| Rango | Bonus al score |
+|---|---|
+| 0 – 23 meses | Sin bonus |
+| 24 – 47 meses (2-3 años) | +5 puntos |
+| 48+ meses (4+ años) | +10 puntos |
+
+---
+
+## Requerimientos Funcionales del Sistema
+
+### Requerimientos Funcionales Clave (Especificados)
+
+---
+
+#### RF01 – Registro de usuarios
+
+**Descripción**
+El sistema debe permitir el registro de nuevos usuarios mediante correo electrónico y contraseña utilizando Firebase Authentication.
+
+**Campos de entrada (5 inputs)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Nombre completo | Texto | Mín: 3 caracteres · Máx: 100 caracteres · Capitalización automática por palabra |
+| 2 | Correo electrónico | Email | Formato obligatorio: `usuario@dominio.com` · Teclado tipo email |
+| 3 | Teléfono | Numérico | Opcional · Teclado numérico |
+| 4 | Contraseña | Campo de contraseña | Mín: 8 caracteres · Debe contener al menos una letra y un número · Ícono de visibilidad on/off |
+| 5 | Confirmar contraseña | Campo de contraseña | Debe coincidir exactamente con el campo contraseña · Ícono de visibilidad on/off |
+| 6 | Tipo de usuario | Selector visual (chips) | Opciones: **Cliente** · **Asesor** · Selección obligatoria |
+
+**Validaciones (6)**
+- Ningún campo obligatorio puede estar vacío
+- El nombre debe tener al menos 3 caracteres
+- El correo debe tener formato válido (contener @)
+- El correo no debe estar registrado previamente en Firebase
+- La contraseña debe tener mínimo 8 caracteres
+- Las contraseñas deben coincidir
+
+**Salidas**
+- Usuario registrado correctamente → redirige a Home del Cliente o Dashboard del Asesor según el rol
+- Mensaje de error si el correo ya está registrado
+- Mensaje de error si alguna validación falla
+
+---
+
+#### RF02 – Autenticación de usuarios
+
+**Descripción**
+El sistema debe autenticar usuarios mediante correo/contraseña o biometría usando Firebase Authentication.
+
+**Campos de entrada (2 inputs + 1 acción biométrica)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Correo electrónico | Email | Formato obligatorio: `usuario@dominio.com` |
+| 2 | Contraseña | Campo de contraseña | Mín: 6 caracteres · Ícono de visibilidad on/off |
+| 3 | Acceso biométrico | Botón de acción | Activa sensor de huella o Face ID del dispositivo |
+
+**Validaciones (5)**
+- El correo debe tener formato válido
+- La contraseña no puede estar vacía
+- Si el correo no existe → mostrar "No existe cuenta con este correo"
+- Si la contraseña es incorrecta → mostrar "Contraseña incorrecta"
+- Si hay demasiados intentos → mostrar "Demasiados intentos. Espera un momento"
+
+**Salidas**
+- Login exitoso → redirige según rol (Cliente → Home, Asesor → Dashboard)
+- Mensaje de error específico según el tipo de fallo
+
+---
+
+#### RF05 – Entrevista financiera digital (Paso 1: Actividad económica)
+
+**Descripción**
+El sistema debe permitir al cliente completar el primer paso de la entrevista financiera, recopilando su actividad económica e ingresos. Esta información es la base para calcular el Score RiskMobile.
+
+**Campos de entrada (4 inputs)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Actividad económica | Selector visual (lista de opciones con íconos) | Opciones: **Empleado** (ícono work) · **Independiente** (ícono self_improvement) · **Pensionado** (ícono elderly) · **Comerciante** (ícono storefront) · **Profesional independiente** (ícono school) · Selección obligatoria · Solo una opción |
+| 2 | Tipo de contrato | Selector desplegable (Dropdown) | Opciones: **Término indefinido** · **Término fijo** · **Prestación de servicios** · **Independiente** · Visible solo si actividad = Empleado o Profesional independiente |
+| 3 | Antigüedad laboral | Campo numérico | Unidad: meses · Valor mínimo: 0 · Valor máximo: 600 (50 años) · Teclado numérico |
+| 4 | Ingresos mensuales | Campo numérico con prefijo $ | Valor mínimo: 0 · Valor máximo: 100.000.000 · Teclado numérico · Prefijo `$` visual |
+
+**Validaciones (4)**
+- La actividad económica es obligatoria (no puede avanzar sin seleccionar)
+- Los ingresos son obligatorios y deben ser numéricos
+- Los ingresos no pueden ser negativos
+- La antigüedad no puede ser negativa
+
+**Salidas**
+- Datos almacenados temporalmente → avanza al Paso 2
+- Botón "Continuar" deshabilitado hasta que los campos obligatorios estén completos
+
+---
+
+#### RF10 – Registro de obligaciones financieras (Paso 2)
+
+**Descripción**
+El sistema debe permitir al cliente registrar sus obligaciones financieras actuales (créditos, cuotas, deudas). Puede registrar múltiples obligaciones o indicar que no tiene ninguna.
+
+**Campos de entrada (5 inputs por obligación)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | ¿Tiene créditos actualmente? | Switch (toggle) | Sí / No · Si selecciona "No", no se muestran los demás campos |
+| 2 | Entidad financiera | Texto | Mín: 2 caracteres · Máx: 100 caracteres · Ejemplo: "Bancolombia", "Davivienda" |
+| 3 | Tipo de crédito | Selector desplegable (Dropdown) | Opciones: **Libre inversión** · **Vivienda** · **Vehículo** · **Libranza** · **Crédito educativo** · **Microcrédito** |
+| 4 | Cuota mensual | Campo numérico con prefijo $ | Valor mínimo: 0 · Solo valores numéricos · Prefijo `$` |
+| 5 | Saldo pendiente | Campo numérico con prefijo $ | Opcional · Valor mínimo: 0 |
+
+**Funcionalidad adicional**
+- Botón "Agregar obligación" → abre modal (bottom sheet) para registrar cada obligación
+- Se pueden agregar N obligaciones (lista dinámica)
+- Cada obligación se muestra como tarjeta con botón de eliminar (X)
+
+**Validaciones (4)**
+- Si indica que tiene créditos, debe agregar al menos una obligación con datos completos
+- Los valores de cuota y saldo deben ser numéricos
+- La entidad financiera no puede estar vacía
+- Debe seleccionar un tipo de crédito
+
+**Salidas**
+- Lista de obligaciones almacenada → avanza al Paso 3
+- Si no tiene obligaciones → avanza directamente
+
+---
+
+#### RF07 – Registro de monto deseado e intención de crédito (Paso 3)
+
+**Descripción**
+El sistema debe permitir al cliente declarar cuánto dinero desea solicitar y el tipo de crédito de interés. Estos datos se comparan con la capacidad real calculada.
+
+**Campos de entrada (2 inputs)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Monto deseado | Campo numérico con prefijo $ | Valor mínimo: 0 · Valor máximo: 500.000.000 · Placeholder: "Ej: 20000000" · Teclado numérico |
+| 2 | Tipo de crédito de interés | Selector visual (Chips / Wrap) | Opciones: **Libre inversión** · **Vivienda** · **Vehículo** · **Libranza** · **Crédito educativo** · **Microcrédito** · Selección de una opción · Efecto gradiente al seleccionar |
+
+**Validaciones (2)**
+- El monto solo acepta valores numéricos
+- El monto no puede ser negativo
+
+**Información adicional mostrada**
+- Card informativo: "Esta evaluación es preliminar y no genera huella en centrales de riesgo como Datacrédito"
+
+**Salidas**
+- Al presionar "Calcular mi perfil financiero" → se guardan todos los datos en Firestore, se calcula el Score RiskMobile y se redirige a la pantalla de Perfil Financiero
+
+---
+
+#### RF13 – Cálculo del nivel de endeudamiento
+
+**Descripción**
+El sistema debe calcular automáticamente el nivel de endeudamiento del cliente basándose en sus ingresos y cuotas mensuales declaradas.
+
+**Entradas**
+- Ingresos mensuales (del Paso 1)
+- Total de cuotas mensuales (suma de todas las obligaciones del Paso 2)
+
+**Proceso de cálculo**
+
+```
+Nivel de endeudamiento (%) = (Total cuotas mensuales / Ingresos mensuales) × 100
+```
+
+```
+Capacidad disponible ($) = (Ingresos × 40%) − Total cuotas mensuales
+```
+
+**Validaciones (2)**
+- Los ingresos deben ser mayores que cero (evitar división por cero)
+- Si la capacidad es negativa, se muestra como $0
+
+**Salidas visuales**
+- Gauge (barra de progreso) con nivel de endeudamiento
+- Código de colores: Verde (<30%), Naranja (30-40%), Rojo (>40%)
+- Indicadores: "Ideal <30%" y "Máximo 40%"
+- Porcentaje numérico mostrado
+
+---
+
+#### RF15 – Generación del Score RiskMobile
+
+**Descripción**
+Al completar los 3 pasos de la entrevista financiera, el sistema genera automáticamente el Score RiskMobile (0-100) como indicador orientativo del perfil financiero del usuario.
+
+**Entradas (4 variables)**
+- Capacidad de pago → calculada de ingresos y cuotas
+- Nivel de endeudamiento → calculado de cuotas/ingresos
+- Estabilidad laboral → según actividad económica y antigüedad
+- Historial financiero → según si declara obligaciones existentes
+
+**Proceso**
+- Se aplica la fórmula ponderada descrita en la sección "Score RiskMobile"
+
+**Salidas visuales**
+- Widget circular animado mostrando el score (0-100)
+- Color según clasificación (verde/naranja/rojo/morado)
+- Etiqueta de clasificación ("Riesgo Bajo", "Riesgo Medio", etc.)
+- Texto: "/100" debajo del número
+
+**Nota importante mostrada al usuario**
+> "El Score RiskMobile es un indicador informativo basado en la información que usted declara. No reemplaza el score de las centrales de riesgo. Para conocer su score real en Datacrédito u otras centrales, debe realizar la consulta directa con pago."
+
+---
+
+#### RF17 – Simulador dinámico de crédito
+
+**Descripción**
+El sistema debe proporcionar un simulador interactivo donde el usuario ajusta parámetros y ve en tiempo real la cuota estimada y el monto máximo de crédito.
+
+**Campos de entrada (4 inputs)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Tasa de interés mensual | **Slider** | Rango: 0.50% – 4.00% · Divisiones: 70 (cada 0.05%) · Valor por defecto: 1.50% · Muestra badge con valor actual en tiempo real |
+| 2 | Plazo del crédito | **Slider** | Rango: 6 – 240 meses · Divisiones: por cada 6 meses · Valor por defecto: 36 meses · Muestra equivalente en años |
+| 3 | Monto deseado | **Slider** | Rango: 0 – Monto máximo × 2 · Divisiones: 40 · Valor inicial: monto declarado en entrevista |
+| 4 | Tipo de crédito | Selector horizontal (Chips scroll) | Opciones: **Libre inversión** · **Vivienda** · **Vehículo** · **Libranza** · **Crédito educativo** · **Microcrédito** |
+
+**Presets rápidos de plazo**
+- 6 botones: 6M, 1A, 2A, 3A, 5A, 7A (meses/años)
+
+**Proceso de cálculo**
+
+```
+Cuota mensual = P × r × (1+r)^n / ((1+r)^n − 1)
+
+Donde:
+  P = monto del crédito
+  r = tasa de interés mensual (decimal)
+  n = plazo en meses
+```
+
+```
+Monto máximo = Capacidad_disponible × (1 − (1+r)^−n) / r
+```
+
+**Validaciones (3)**
+- La tasa debe estar dentro del rango permitido
+- El plazo debe estar dentro del rango permitido
+- Si capacidad = 0, monto máximo = 0
+
+**Salidas visuales (6)**
+- Cuota mensual estimada (número grande, actualización en tiempo real)
+- Monto máximo viable
+- Tasa seleccionada con sufijo "% M.V." (mensual vencida)
+- Plazo seleccionado en meses
+- Total a pagar (cuota × plazo)
+- Comparación visual (barras) monto deseado vs monto viable
+
+---
+
+#### RF23 – Panel CRM del asesor
+
+**Descripción**
+El sistema debe mostrar al asesor un panel de gestión de clientes con estadísticas, búsqueda y filtros.
+
+**Campos de entrada (2 inputs)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Búsqueda de cliente | Campo de texto con ícono lupa | Búsqueda por nombre · Filtrado en tiempo real · Botón de limpiar (X) |
+| 2 | Filtro de estado | Selector horizontal (Chips scroll) | Opciones: **Todos** · **Entrevista completada** · **Análisis en proceso** · **Documentos pendientes** · **Solicitud radicada** · **Crédito aprobado** · **Crédito rechazado** |
+
+**Información mostrada por cliente**
+- Avatar con inicial del nombre
+- Nombre completo
+- Actividad económica + ingreso mensual
+- Score RiskMobile (badge con color)
+- Estado del caso (badge con color)
+- Tiempo desde última actualización ("hace 2h", "hace 3 días")
+
+**Estadísticas resumen (3 cards)**
+- Total de clientes
+- Clientes aprobados
+- Clientes en proceso
+
+---
+
+#### RF25 – Actualización de estado del caso
+
+**Descripción**
+El sistema debe permitir al asesor cambiar el estado del caso de un cliente.
+
+**Campo de entrada (1 input)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Estado del caso | Selector desplegable (Dropdown) | Opciones: **Entrevista completada** · **Análisis en proceso** · **Documentos pendientes** · **Solicitud radicada** · **Crédito aprobado** · **Crédito rechazado** |
+
+**Validaciones (1)**
+- Solo asesores pueden cambiar el estado
+
+**Salidas**
+- Estado actualizado en Firestore con `updatedAt` actualizado
+- SnackBar: "Estado actualizado: [nuevo estado]"
+
+---
+
+#### RF26 – Chat entre asesor y cliente
+
+**Descripción**
+El sistema debe permitir comunicación bidireccional en tiempo real mediante chat interno entre asesor y cliente, usando Cloud Firestore como backend de mensajería.
+
+**Campos de entrada (1 input)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Mensaje | Campo de texto multilínea | Mín: 1 carácter · Máx: 500 caracteres · Máximo 4 líneas · Capitalización por oración · Envío con botón o tecla Enter |
+
+**Validaciones (1)**
+- El mensaje no puede estar vacío (solo espacios no cuenta)
+
+**Funcionalidad**
+- Mensajes en tiempo real via Firestore streams
+- Burbujas diferenciadas: mensajes propios (gradiente azul-morado, alineados a la derecha) vs mensajes recibidos (blanco, alineados a la izquierda)
+- Avatar del remitente con inicial
+- Indicador "En línea"
+- Timestamp relativo ("hace 5 min", "hace 2h")
+- Auto-scroll al último mensaje
+
+**Salidas**
+- Mensaje enviado y visible en tiempo real para ambas partes
+
+---
+
+#### RF28 – Registro de comisiones del asesor
+
+**Descripción**
+El sistema debe permitir al asesor registrar las comisiones cobradas por cada caso de crédito gestionado.
+
+**Campos de entrada (4 inputs)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Nombre del cliente | Texto | Capitalización por palabra · No puede estar vacío |
+| 2 | Valor del crédito aprobado | Campo numérico con prefijo $ | Valor mínimo: 1 · Solo valores numéricos |
+| 3 | Comisión cobrada | Campo numérico con prefijo $ | No puede estar vacío · Solo valores numéricos |
+| 4 | Costos del proceso | Campo numérico con prefijo $ | Valor por defecto: 0 · Opcional |
+
+**Cálculo en tiempo real**
+```
+Utilidad estimada = Comisión − Costos
+```
+Se muestra en un card hero con gradiente, actualizándose al escribir.
+
+**Validaciones (3)**
+- Nombre del cliente obligatorio
+- Valor del crédito debe ser mayor que cero
+- La comisión es obligatoria
+
+**Salidas**
+- Comisión registrada en Firestore
+- SnackBar: "Comisión registrada exitosamente"
+- Regresa a la pantalla anterior
+
+---
+
+#### RF29 – Panel financiero del asesor
+
+**Descripción**
+El sistema debe mostrar un panel financiero con el resumen del negocio del asesor.
+
+**Información mostrada**
+| Dato | Cómo se calcula |
+|---|---|
+| Total de comisiones | Suma de `commissionAmount` de todas las comisiones |
+| Costos operativos | Suma de `costs` de todas las comisiones |
+| Utilidad neta | Total comisiones − Total costos |
+| Historial de comisiones | Lista ordenada por fecha, con nombre de cliente, monto del crédito y comisión |
+
+**Proceso**
+```
+Utilidad neta = Σ Comisiones − Σ Costos
+```
+
+---
+
+#### RF08 – Carga de documentos por cámara
+
+**Descripción**
+El sistema debe permitir al cliente capturar documentos soporte mediante la cámara del dispositivo.
+
+**Funcionalidad (3 métodos de carga)**
+
+| # | Método | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Tomar foto | Botón con ícono cámara | Abre cámara del dispositivo · Calidad de imagen: 85% · Formatos: JPG |
+| 2 | Galería | Botón con ícono galería | Abre selector de fotos · Calidad: 85% · Formatos: JPG, PNG |
+| 3 | Archivo | Botón con ícono upload | Abre selector de archivos · Formatos permitidos: PDF, JPG, PNG, JPEG |
+
+**Tipos de documentos aceptados**
+- Certificado laboral / Desprendible de nómina
+- Extractos bancarios
+- RUT / Cámara de comercio
+- Resolución de pensión
+
+**Validaciones (2)**
+- Solo se permiten los formatos especificados
+- El archivo debe tener un path válido
+
+**Salidas**
+- Documento agregado a la lista con ícono según tipo (PDF/imagen)
+- Indicador de estado (check verde)
+- Opción de eliminar cada documento
+
+---
+
+#### RF36 – Recuperación de contraseña
+
+**Descripción**
+El sistema debe permitir al usuario solicitar el restablecimiento de contraseña en caso de olvido.
+
+**Campos de entrada (1 input)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Correo electrónico | Email | Formato obligatorio: `usuario@dominio.com` |
+
+**Validaciones (2)**
+- El correo debe tener formato válido
+- Firebase envía correo solo si el email está registrado
+
+**Salidas**
+- Firebase envía correo de restablecimiento
+- Mensaje: "Revisa tu correo para restablecer tu contraseña"
+
+---
+
+#### RF37 – Historial de evaluaciones
+
+**Descripción**
+El sistema debe permitir al cliente ver el historial de evaluaciones financieras realizadas, ordenadas por fecha.
+
+**Información mostrada por evaluación**
+- Fecha de la evaluación
+- Score RiskMobile obtenido
+- Nivel de endeudamiento
+- Estado del caso
+- Actividad económica registrada
+
+**Funcionalidad**
+- Lista ordenada por fecha (más reciente primero)
+- Tap en una evaluación → abre el detalle completo (Perfil Financiero)
+
+---
+
+#### RF38 – Validación de documentos por el asesor
+
+**Descripción**
+El sistema debe permitir al asesor revisar y validar los documentos cargados por el cliente.
+
+**Campos de entrada (1 input por documento)**
+
+| # | Campo | Tipo de campo | Especificaciones |
+|---|---|---|---|
+| 1 | Estado del documento | Selector | Opciones: **Pendiente de revisión** · **Aprobado** · **Rechazado (requiere reenvío)** |
+
+**Salidas**
+- Estado del documento actualizado
+- Si rechazado → notificación al cliente para reenviar
+
+---
+
+### Otros Requerimientos Funcionales
 
 | ID | Requisito | Prioridad |
 |---|---|---|
-| RF01 | El sistema debe permitir el registro de usuarios mediante correo electrónico y contraseña | Alta |
-| RF02 | El sistema debe autenticar usuarios utilizando Firebase Authentication | Alta |
-| RF03 | El sistema debe permitir la autenticación biométrica (huella/Face ID) | Alta |
-| RF04 | El sistema debe asignar roles diferenciados: Cliente y Asesor | Alta |
-| RF05 | El sistema debe permitir al cliente realizar una entrevista financiera digital estructurada | Alta |
-| RF06 | El sistema debe solicitar información sobre la actividad económica del cliente (empleado, independiente, pensionado, comerciante, profesional independiente) | Alta |
-| RF07 | El sistema debe permitir al cliente registrar sus ingresos mensuales | Alta |
-| RF08 | El sistema debe permitir la carga de documentos soporte mediante fotografía desde la cámara | Alta |
-| RF09 | El sistema debe permitir la carga de documentos soporte desde archivos (PDF, imagen) | Alta |
-| RF10 | El sistema debe solicitar información sobre obligaciones financieras actuales del cliente | Alta |
-| RF11 | El sistema debe permitir registrar por cada obligación: entidad, tipo de crédito, cuota mensual y saldo | Alta |
-| RF12 | El sistema debe permitir la carga de extractos bancarios como soporte de obligaciones | Media |
-| RF13 | El sistema debe calcular automáticamente el nivel de endeudamiento (total cuotas / ingresos) | Alta |
-| RF14 | El sistema debe calcular la capacidad disponible para nueva cuota | Alta |
-| RF15 | El sistema debe generar el Score RiskMobile (0-100) basado en capacidad de pago, endeudamiento, estabilidad laboral e historial financiero | Alta |
-| RF16 | El sistema debe clasificar el riesgo del cliente (bajo, medio, alto, muy alto) | Alta |
-| RF17 | El sistema debe proporcionar un simulador dinámico de crédito con slider de tasa de interés | Alta |
-| RF18 | El sistema debe proporcionar un slider de plazo de crédito (6-240 meses) | Alta |
-| RF19 | El sistema debe permitir seleccionar el tipo de crédito (vivienda, vehículo, libre inversión, libranza, educativo, microcrédito) | Alta |
-| RF20 | El sistema debe calcular automáticamente la cuota mensual y el monto máximo estimado según los parámetros del simulador | Alta |
-| RF21 | El sistema debe permitir al cliente registrar el monto deseado de crédito | Media |
-| RF22 | El sistema debe comparar el monto deseado contra el monto viable y mostrar el análisis de brecha | Media |
-| RF23 | El sistema debe proporcionar al asesor un panel CRM con todos los clientes asignados | Alta |
-| RF24 | El sistema debe permitir al asesor visualizar el perfil financiero completo de cada cliente | Alta |
-| RF25 | El sistema debe permitir al asesor actualizar el estado del caso (entrevista completada, análisis en proceso, documentos pendientes, solicitud radicada, crédito aprobado, crédito rechazado) | Alta |
-| RF26 | El sistema debe proporcionar comunicación en tiempo real entre asesor y cliente mediante chat interno | Alta |
-| RF27 | El sistema debe permitir al asesor buscar y filtrar clientes por nombre y estado del caso | Media |
-| RF28 | El sistema debe permitir al asesor registrar comisiones cobradas por caso | Alta |
-| RF29 | El sistema debe calcular la utilidad neta del asesor (comisión - costos) | Alta |
-| RF30 | El sistema debe mostrar un panel financiero del asesor con ingresos totales, comisiones, costos y utilidades | Alta |
-| RF31 | El sistema debe mostrar estadísticas de clientes: total, aprobados, en proceso | Media |
-| RF32 | El sistema debe permitir cerrar sesión desde cualquier pantalla | Baja |
-| RF33 | El sistema debe permitir la configuración de notificaciones push | Media |
-| RF34 | El sistema debe permitir la activación/desactivación de autenticación biométrica | Media |
-| RF35 | El sistema debe almacenar los documentos cargados de forma segura en Firebase Storage | Alta |
+| RF03 | El sistema debe permitir autenticación biométrica mediante huella digital o reconocimiento facial usando `local_auth` | Alta |
+| RF04 | El sistema debe asignar roles diferenciados (Cliente y Asesor) al momento del registro, determinando la interfaz y permisos disponibles | Alta |
+| RF06 | El sistema debe solicitar y almacenar la actividad económica del cliente mediante selector visual con 5 opciones predefinidas | Alta |
+| RF09 | El sistema debe permitir subir documentos desde archivos del dispositivo (PDF, imagen) con selector de archivos nativo | Alta |
+| RF11 | El sistema debe permitir registrar múltiples obligaciones financieras mediante formulario dinámico con botón "Agregar obligación" y modal de ingreso | Alta |
+| RF12 | El sistema debe permitir cargar extractos bancarios como soporte de las obligaciones declaradas | Media |
+| RF14 | El sistema debe calcular la capacidad disponible para nueva cuota: `(Ingresos × 40%) − Total cuotas` | Alta |
+| RF16 | El sistema debe clasificar el riesgo del cliente en 4 niveles (bajo, medio, alto, muy alto) con colores diferenciados | Alta |
+| RF18 | El sistema debe proporcionar un slider de plazo de crédito con rango de 6 a 240 meses y presets rápidos | Alta |
+| RF19 | El sistema debe permitir seleccionar el tipo de crédito entre 6 opciones mediante chips horizontales con scroll | Alta |
+| RF20 | El sistema debe calcular automáticamente la cuota mensual usando la fórmula de amortización francesa y actualizar en tiempo real | Alta |
+| RF21 | El sistema debe permitir al cliente registrar el monto de crédito deseado para compararlo con el monto viable calculado | Media |
+| RF22 | El sistema debe comparar visualmente (barras de progreso) el monto deseado contra el monto viable y mostrar si es "Viable" o la "Brecha" en pesos | Media |
+| RF24 | El sistema debe permitir al asesor visualizar el perfil financiero completo de cada cliente, incluyendo score, gauge de endeudamiento, obligaciones detalladas y datos de la entrevista | Alta |
+| RF27 | El sistema debe permitir al asesor buscar clientes por nombre (filtrado en tiempo real) y filtrar por estado del caso (chips horizontales) | Media |
+| RF30 | El sistema debe mostrar un panel financiero con total de comisiones, costos, utilidad neta e historial detallado por cliente | Alta |
+| RF31 | El sistema debe mostrar estadísticas de clientes: total, aprobados y en proceso, mediante cards con conteo numérico | Media |
+| RF32 | El sistema debe permitir cerrar sesión desde la pantalla de configuración y desde el perfil del asesor, redirigiendo al login | Baja |
+| RF33 | El sistema debe permitir activar/desactivar notificaciones push mediante Switch toggle en la pantalla de configuración | Media |
+| RF34 | El sistema debe permitir activar/desactivar autenticación biométrica mediante Switch toggle en configuración | Media |
+| RF35 | El sistema debe almacenar los documentos cargados de forma segura en Firebase Storage, organizados por usuario | Alta |
 
 ---
 
@@ -163,17 +682,17 @@ El sistema genera un indicador interno de perfil financiero (0-100) antes de con
 | RNF03 | El sistema debe implementar autenticación multifactor (correo + biometría) | Seguridad |
 | RNF04 | El acceso a datos debe estar controlado por roles (cliente solo ve sus datos, asesor ve sus clientes) | Seguridad |
 | RNF05 | El sistema debe aplicar principios Zero-Trust: verificación continua de identidad | Seguridad |
-| RNF06 | Las contraseñas deben tener un mínimo de 8 caracteres | Seguridad |
+| RNF06 | Las contraseñas deben tener un mínimo de 8 caracteres con al menos una letra y un número | Seguridad |
 | RNF07 | La aplicación debe tener disponibilidad mínima del 99% (garantizada por Firebase) | Disponibilidad |
 | RNF08 | El tiempo de respuesta del cálculo de evaluación financiera no debe superar 2 segundos | Rendimiento |
-| RNF09 | El simulador de crédito debe actualizar los valores en tiempo real al mover los sliders | Rendimiento |
+| RNF09 | El simulador de crédito debe actualizar los valores en tiempo real al mover los sliders (sin delay perceptible) | Rendimiento |
 | RNF10 | La carga de documentos debe mostrar indicador de progreso | Rendimiento |
 | RNF11 | La aplicación debe ejecutarse en Android 10+ y iOS 14+ | Compatibilidad |
-| RNF12 | La aplicación debe funcionar correctamente en pantallas de 5" a 12" | Compatibilidad |
-| RNF13 | El proceso de entrevista financiera debe completarse en máximo 3 pasos | Usabilidad |
+| RNF12 | La aplicación debe funcionar correctamente en pantallas de 5" a 12" con diseño responsive | Compatibilidad |
+| RNF13 | El proceso de entrevista financiera debe completarse en máximo 3 pasos con indicador de progreso | Usabilidad |
 | RNF14 | La interfaz debe seguir las guías de diseño de Material 3 con tipografía tipo Apple (Inter/SF Pro) | Usabilidad |
 | RNF15 | La paleta de colores debe usar azul claro (#4FC3F7), morado claro (#CE93D8), tonos traslúcidos y fondos blancos | Usabilidad |
-| RNF16 | La aplicación debe mostrar animaciones fluidas (mínimo 60fps) | Usabilidad |
+| RNF16 | La aplicación debe mostrar animaciones fluidas (mínimo 60fps) usando flutter_animate | Usabilidad |
 | RNF17 | El sistema debe soportar múltiples clientes concurrentes sin degradación de rendimiento | Escalabilidad |
 | RNF18 | La arquitectura debe permitir la futura integración de OCR para análisis automático de documentos | Escalabilidad |
 | RNF19 | La arquitectura debe permitir la futura integración con APIs bancarias y centrales de riesgo (Datacrédito) | Escalabilidad |
@@ -184,15 +703,15 @@ El sistema genera un indicador interno de perfil financiero (0-100) antes de con
 ## Flujo del Sistema
 
 1. **Registro** — El usuario crea su cuenta (correo + contraseña + rol)
-2. **Entrevista financiera** — Responde preguntas sobre actividad económica e ingresos
-3. **Carga de documentos** — Adjunta soportes de ingresos y obligaciones (foto/archivo)
-4. **Evaluación de obligaciones** — Registra créditos actuales y cuotas mensuales
-5. **Cálculo de perfil** — El sistema calcula endeudamiento, capacidad y Score RiskMobile
-6. **Simulación** — El usuario explora montos, tasas y plazos con sliders interactivos
-7. **Intención** — El usuario declara cuánto dinero desea solicitar
+2. **Entrevista financiera — Paso 1** — Actividad económica, tipo de contrato, antigüedad, ingresos
+3. **Entrevista financiera — Paso 2** — Obligaciones financieras (entidad, tipo, cuota, saldo)
+4. **Entrevista financiera — Paso 3** — Monto deseado y tipo de crédito de interés
+5. **Carga de documentos** — Adjunta soportes de ingresos y obligaciones (foto/archivo)
+6. **Cálculo de perfil** — El sistema calcula endeudamiento, capacidad y Score RiskMobile
+7. **Simulación** — El usuario explora montos, tasas y plazos con sliders interactivos
 8. **Panel del asesor** — El asesor analiza el perfil, documentos y la brecha monto deseado vs viable
-9. **Comunicación** — Asesor y cliente intercambian mensajes por chat
-10. **Gestión del caso** — El asesor actualiza estados, registra avances y tareas
+9. **Comunicación** — Asesor y cliente intercambian mensajes por chat en tiempo real
+10. **Gestión del caso** — El asesor actualiza estados del caso
 11. **Cobro de servicios** — El asesor puede cobrar consultas especializadas
 12. **Control financiero** — El asesor registra comisiones, costos y visualiza utilidades
 
@@ -217,6 +736,8 @@ El sistema genera un indicador interno de perfil financiero (0-100) antes de con
 | clientId | string | ID del cliente |
 | clientName | string | Nombre del cliente |
 | economicActivity | string | Actividad económica |
+| contractType | string | Tipo de contrato laboral |
+| seniority | number | Antigüedad en meses |
 | monthlyIncome | number | Ingreso mensual |
 | obligations | array | Lista de obligaciones financieras |
 | totalMonthlyPayments | number | Total de cuotas mensuales |
@@ -264,6 +785,9 @@ El sistema genera un indicador interno de perfil financiero (0-100) antes de con
 | Blanco | `#FFFFFF` | Fondos principales |
 | Blanco azulado | `#F8FBFF` | Superficies de tarjetas |
 | Traslúcidos | Opacidad 12% | Efectos glassmorphism |
+| Verde | `#4CAF50` | Riesgo bajo / Aprobado |
+| Naranja | `#FF9800` | Riesgo medio / En proceso |
+| Rojo | `#F44336` | Riesgo alto / Rechazado |
 
 ---
 
@@ -285,9 +809,6 @@ cd RiskMobile
 # Instalar dependencias
 flutter pub get
 
-# Configurar Firebase (reemplazar firebase_options.dart con tus credenciales)
-# flutterfire configure
-
 # Ejecutar en modo debug
 flutter run
 ```
@@ -297,9 +818,9 @@ flutter run
 ## Trabajo Futuro
 
 - Integración de OCR para análisis automático de documentos
-- Integración con APIs de centrales de riesgo (Datacrédito Experian)
+- Integración con APIs de centrales de riesgo (Datacrédito Experian) para consulta de score real
 - Modelos de IA/ML para predicción avanzada de riesgo crediticio
-- Integración con pasarelas de pago (PSE, tarjeta)
+- Integración con pasarelas de pago (PSE, tarjeta) para cobro de consultas
 - Firma digital de documentos
 - Modo offline con sincronización automática
 - Dashboard web para administradores

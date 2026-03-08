@@ -117,7 +117,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.clientDetail,
         pageBuilder: (context, state) {
-          final profileId = state.extra as String;
+          final profileId = state.extra as String? ?? '';
           return CustomTransitionPage(
             child: ClientDetailScreen(profileId: profileId),
             transitionsBuilder: _slideTransition,
