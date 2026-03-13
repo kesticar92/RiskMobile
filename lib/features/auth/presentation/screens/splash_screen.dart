@@ -13,15 +13,29 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with TickerProviderStateMixin {
+  static const int _splashDurationMs = 2500;
+  late AnimationController _progressController;
+
   @override
   void initState() {
     super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: _splashDurationMs),
+    )..forward();
     _navigate();
   }
 
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
+
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 2500));
+    await Future.delayed(const Duration(milliseconds: _splashDurationMs));
     if (!mounted) return;
 
     final authService = ref.read(authServiceProvider);
@@ -120,13 +134,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   .animate()
                   .fadeIn(delay: 900.ms, duration: 500.ms),
               const Spacer(flex: 2),
-              // Loading indicator
+              // Loading indicator (determinado como en mockup)
               SizedBox(
-                width: 60,
-                child: LinearProgressIndicator(
-                  backgroundColor: AppColors.blueTranslucent,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-                  borderRadius: BorderRadius.circular(4),
+                width: 200,
+                child: AnimatedBuilder(
+                  animation: _progressController,
+                  builder: (context, _) => LinearProgressIndicator(
+                    value: _progressController.value,
+                    backgroundColor: AppColors.blueTranslucent,
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
               )
                   .animate()

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/role_selection_screen.dart';
 import '../../features/interview/presentation/screens/interview_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
@@ -20,6 +21,7 @@ class AppRoutes {
   static const splash = '/';
   static const login = '/login';
   static const register = '/register';
+  static const forgotPassword = '/forgot-password';
   static const roleSelection = '/role-selection';
   static const clientHome = '/client-home';
   static const interview = '/interview';
@@ -53,6 +55,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.register,
         pageBuilder: (context, state) => CustomTransitionPage(
           child: const RegisterScreen(),
+          transitionsBuilder: _slideTransition,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          child: const ForgotPasswordScreen(),
           transitionsBuilder: _slideTransition,
         ),
       ),

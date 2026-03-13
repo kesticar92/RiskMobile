@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/auth_service.dart';
@@ -38,6 +41,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  String _mapRegisterError(Object e) {
+    if (e is FirebaseAuthException) {
+      switch (e.code) {
+        case 'email-already-in-use':
+          return 'Este correo ya está registrado. Inicia sesión o usa otro correo.';
+        case 'invalid-email':
+          return 'El correo no es válido.';
+        case 'weak-password':
+          return 'La contraseña es muy débil. Usa al menos 8 caracteres con letras y números.';
+        case 'operation-not-allowed':
+          return 'Registro por correo deshabilitado. Contacta al administrador.';
+        case 'invalid-credential':
+          return 'Credenciales inválidas. Revisa correo y contraseña.';
+        default:
+          return e.message ?? 'Error de autenticación. Intenta de nuevo.';
+      }
+    }
+    if (e is FirebaseException) {
+      if (e.code == 'permission-denied') {
+        return 'Sin permiso para guardar el perfil. Revisa la configuración de Firebase.';
+      }
+      return e.message ?? 'Error al guardar datos. Intenta de nuevo.';
+    }
+    final msg = e.toString();
+    if (msg.contains('email-already-in-use')) return 'Este correo ya está registrado.';
+    if (msg.contains('permission-denied')) return 'Sin permiso en la base de datos. Revisa Firestore.';
+    return 'Error al registrarse. Intenta de nuevo.';
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _isLoading = true; _error = null; });
@@ -56,11 +88,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       } else {
         context.go(AppRoutes.clientHome);
       }
-    } catch (e) {
+    } catch (e, st) {
+      if (kDebugMode) debugPrint('Registro error: $e\n$st');
       setState(() {
-        _error = e.toString().contains('email-already-in-use')
-            ? 'Este correo ya está registrado'
-            : 'Error al registrarse. Intenta de nuevo';
+        _error = _mapRegisterError(e);
       });
     } finally {
       if (mounted) setState(() { _isLoading = false; });
