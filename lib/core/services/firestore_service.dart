@@ -19,6 +19,7 @@ class FirestoreService {
       totalMonthlyObligations: profile.totalMonthlyPayments,
       economicActivity: profile.economicActivity,
       hasFinancialHistory: profile.obligations.isNotEmpty,
+      monthsInActivity: profile.seniorityMonths,
     );
 
     final data = profile.toFirestore();

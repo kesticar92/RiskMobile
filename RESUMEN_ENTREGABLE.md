@@ -183,4 +183,28 @@ Durante la sesión actual se implementaron 3 requerimientos funcionales de la en
 
 ---
 
-*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth y sesión 2: entrevista RF05-RF10-RF07).*
+## 11. Avance sesión de hoy (RF13, RF15, RF17)
+
+En esta sesión se completaron y validaron 3 requerimientos funcionales adicionales:
+
+- **RF13 (Cálculo de endeudamiento):**
+  - Se confirmó visualización del nivel de endeudamiento (%), gauge por color y referencias de ideal/máximo.
+  - Se ajustó `availableCapacity` para que nunca sea negativa (si el cálculo da negativo, se muestra y guarda como `0`).
+
+- **RF15 (Score RiskMobile):**
+  - Se corrigió el cálculo para incluir la antigüedad laboral (`seniorityMonths`) al generar score.
+  - Se agregó la nota informativa en la pantalla de perfil financiero: score orientativo y no equivalente al score oficial de centrales.
+
+- **RF17 (Simulador dinámico):**
+  - Se validó funcionamiento de sliders de tasa, plazo y monto.
+  - Se validó selector de tipo de crédito, presets de plazo y actualización en tiempo real de:
+    - cuota mensual estimada
+    - monto máximo viable
+    - total a pagar
+    - comparación visual monto deseado vs viable.
+
+**Resultado:** RF13, RF15 y RF17 funcionando y validados en ejecución (`flutter run -d chrome`).
+
+---
+
+*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17).*
