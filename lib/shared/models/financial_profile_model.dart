@@ -36,6 +36,8 @@ class FinancialProfileModel {
 
   // Actividad económica
   final String economicActivity;
+  final String? contractType;
+  final int seniorityMonths;
   final double monthlyIncome;
 
   // Obligaciones
@@ -87,6 +89,8 @@ class FinancialProfileModel {
     required this.clientId,
     required this.clientName,
     required this.economicActivity,
+    this.contractType,
+    this.seniorityMonths = 0,
     required this.monthlyIncome,
     required this.obligations,
     this.desiredAmount = 0,
@@ -105,6 +109,8 @@ class FinancialProfileModel {
       clientId: d['clientId'] ?? '',
       clientName: d['clientName'] ?? '',
       economicActivity: d['economicActivity'] ?? '',
+      contractType: d['contractType'],
+      seniorityMonths: (d['seniorityMonths'] ?? 0).toInt(),
       monthlyIncome: (d['monthlyIncome'] ?? 0).toDouble(),
       obligations: (d['obligations'] as List<dynamic>? ?? [])
           .map((o) => FinancialObligation.fromMap(o as Map<String, dynamic>))
@@ -124,6 +130,8 @@ class FinancialProfileModel {
       'clientId': clientId,
       'clientName': clientName,
       'economicActivity': economicActivity,
+      'contractType': contractType,
+      'seniorityMonths': seniorityMonths,
       'monthlyIncome': monthlyIncome,
       'obligations': obligations.map((o) => o.toMap()).toList(),
       'totalMonthlyPayments': totalMonthlyPayments,

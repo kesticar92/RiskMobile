@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +27,8 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
   // Step 1 — Actividad económica
   String? _selectedActivity;
+  String? _selectedContractType;
+  final _seniorityCtrl = TextEditingController();
   final _incomeCtrl = TextEditingController();
 
   // Step 2 — Obligaciones
@@ -41,6 +44,7 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _seniorityCtrl.dispose();
     _incomeCtrl.dispose();
     _desiredAmountCtrl.dispose();
     super.dispose();
@@ -81,6 +85,8 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
         clientId: uid,
         clientName: userData?.name ?? 'Cliente',
         economicActivity: _selectedActivity ?? '',
+        contractType: _selectedContractType,
+        seniorityMonths: int.tryParse(_seniorityCtrl.text.replaceAll(',', '')) ?? 0,
         monthlyIncome: double.tryParse(_incomeCtrl.text.replaceAll(',', '')) ?? 0,
         obligations: _hasObligations ? _obligations : [],
         desiredAmount: double.tryParse(_desiredAmountCtrl.text.replaceAll(',', '')) ?? 0,
@@ -180,14 +186,29 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
                 children: [
                   _ActivityPage(
                     selectedActivity: _selectedActivity,
+                    selectedContractType: _selectedContractType,
+                    seniorityCtrl: _seniorityCtrl,
                     incomeCtrl: _incomeCtrl,
-                    onActivitySelected: (a) => setState(() => _selectedActivity = a),
+                    onActivitySelected: (a) => setState(() {
+                      _selectedActivity = a;
+                      if (a != 'Empleado' &&
+                          a != 'Profesional independiente') {
+                        _selectedContractType = null;
+                      }
+                    }),
+                    onContractTypeSelected: (v) =>
+                        setState(() => _selectedContractType = v),
                   ),
                   _ObligationsPage(
                     hasObligations: _hasObligations,
                     obligations: _obligations,
                     onHasObligationsChanged: (v) =>
-                        setState(() => _hasObligations = v),
+                        setState(() {
+                          _hasObligations = v;
+                          if (!v) {
+                            _obligations.clear();
+                          }
+                        }),
                     onObligationsChanged: (list) =>
                         setState(() => _obligations
                           ..clear()
@@ -223,14 +244,29 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
   }
 
   bool get _canProceed {
+    final income = double.tryParse(_incomeCtrl.text.replaceAll(',', '').trim()) ?? -1;
+    final seniority =
+        int.tryParse(_seniorityCtrl.text.replaceAll(',', '').trim()) ?? 0;
+    final desiredAmount =
+        double.tryParse(_desiredAmountCtrl.text.replaceAll(',', '').trim()) ?? -1;
+    final needsContract = _selectedActivity == 'Empleado' ||
+        _selectedActivity == 'Profesional independiente';
+
     switch (_currentPage) {
       case 0:
         return _selectedActivity != null &&
-            (_incomeCtrl.text.trim().isNotEmpty);
+            income >= 0 &&
+            seniority >= 0 &&
+            (!needsContract || _selectedContractType != null);
       case 1:
-        return true;
+        if (!_hasObligations) return true;
+        if (_obligations.isEmpty) return false;
+        return _obligations.every((o) =>
+            o.entity.trim().length >= 2 &&
+            o.creditType.trim().isNotEmpty &&
+            o.monthlyPayment > 0);
       case 2:
-        return true;
+        return desiredAmount >= 0 && _selectedCreditType != null;
       default:
         return false;
     }
@@ -240,13 +276,19 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 // ---- Page 1: Economic Activity ----
 class _ActivityPage extends StatelessWidget {
   final String? selectedActivity;
+  final String? selectedContractType;
+  final TextEditingController seniorityCtrl;
   final TextEditingController incomeCtrl;
   final ValueChanged<String> onActivitySelected;
+  final ValueChanged<String?> onContractTypeSelected;
 
   const _ActivityPage({
     required this.selectedActivity,
+    required this.selectedContractType,
+    required this.seniorityCtrl,
     required this.incomeCtrl,
     required this.onActivitySelected,
+    required this.onContractTypeSelected,
   });
 
   @override
@@ -319,11 +361,51 @@ class _ActivityPage extends StatelessWidget {
             );
           }),
           const SizedBox(height: 20),
+          if (selectedActivity == 'Empleado' ||
+              selectedActivity == 'Profesional independiente') ...[
+            Text('Tipo de contrato', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: selectedContractType,
+              decoration: const InputDecoration(
+                labelText: 'Selecciona tu tipo de contrato',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+              items: const [
+                DropdownMenuItem(
+                    value: 'Término indefinido', child: Text('Término indefinido')),
+                DropdownMenuItem(
+                    value: 'Término fijo', child: Text('Término fijo')),
+                DropdownMenuItem(
+                    value: 'Prestación de servicios',
+                    child: Text('Prestación de servicios')),
+                DropdownMenuItem(
+                    value: 'Independiente', child: Text('Independiente')),
+              ],
+              onChanged: onContractTypeSelected,
+            ),
+            const SizedBox(height: 18),
+          ],
+          Text('Antigüedad laboral (meses)',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: seniorityCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: '¿Cuántos meses llevas en tu actividad?',
+              prefixIcon: Icon(Icons.timeline_outlined),
+              hintText: '0',
+            ),
+          ),
+          const SizedBox(height: 18),
           Text('Ingreso mensual', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 10),
           TextFormField(
             controller: incomeCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               labelText: '¿Cuánto ganas al mes?',
               prefixIcon: Icon(Icons.attach_money),
@@ -532,6 +614,7 @@ class _AddObligationSheet extends StatefulWidget {
 class _AddObligationSheetState extends State<_AddObligationSheet> {
   final _entityCtrl = TextEditingController();
   final _paymentCtrl = TextEditingController();
+  final _balanceCtrl = TextEditingController();
   String _type = AppConstants.creditTypes.first;
 
   @override
@@ -585,9 +668,21 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
           TextFormField(
             controller: _paymentCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               labelText: 'Cuota mensual',
               prefixIcon: Icon(Icons.attach_money),
+              prefixText: '\$ ',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _balanceCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Saldo pendiente (opcional)',
+              prefixIcon: Icon(Icons.account_balance_wallet_outlined),
               prefixText: '\$ ',
             ),
           ),
@@ -595,10 +690,25 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
           GradientButton(
             label: 'Agregar',
             onPressed: () {
+              final entity = _entityCtrl.text.trim();
+              final payment = double.tryParse(_paymentCtrl.text) ?? 0;
+              final balance = _balanceCtrl.text.trim().isEmpty
+                  ? null
+                  : (double.tryParse(_balanceCtrl.text) ?? 0);
+              if (entity.length < 2 || payment <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                        'Completa entidad y cuota mensual con valores válidos.'),
+                  ),
+                );
+                return;
+              }
               final ob = FinancialObligation(
-                entity: _entityCtrl.text,
+                entity: entity,
                 creditType: _type,
-                monthlyPayment: double.tryParse(_paymentCtrl.text) ?? 0,
+                monthlyPayment: payment,
+                balance: balance,
               );
               widget.onAdd(ob);
               Navigator.pop(context);
@@ -647,6 +757,7 @@ class _IntentionPage extends StatelessWidget {
                 TextFormField(
                   controller: desiredAmountCtrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: const InputDecoration(
                     hintText: 'Ej: 20000000',
                     prefixText: '\$ ',
