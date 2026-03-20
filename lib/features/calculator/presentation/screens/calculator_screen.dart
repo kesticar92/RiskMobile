@@ -129,6 +129,32 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
                   label: p.riskLabel,
                   size: 140,
                 ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.blueTranslucent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 18, color: AppColors.primaryBlueDark),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'El Score RiskMobile es informativo y se calcula con los datos que declaras. '
+                          'No reemplaza el score oficial de Datacrédito u otras centrales de riesgo.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primaryBlueDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2),
