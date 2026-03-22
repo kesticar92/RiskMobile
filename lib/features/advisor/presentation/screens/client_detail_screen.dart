@@ -23,6 +23,7 @@ class ClientDetailScreen extends ConsumerStatefulWidget {
 class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   FinancialProfileModel? _profile;
   bool _isLoading = true;
+  bool _updatingStatus = false;
 
   @override
   void initState() {
@@ -34,6 +35,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     final p = await ref
         .read(firestoreServiceProvider)
         .getFinancialProfile(widget.profileId);
+    if (!mounted) return;
     setState(() {
       _profile = p;
       _isLoading = false;
@@ -41,14 +43,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   }
 
   Future<void> _updateStatus(String status) async {
-    await ref
-        .read(firestoreServiceProvider)
-        .updateCaseStatus(widget.profileId, status);
-    await _load();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Estado actualizado: $status')),
-      );
+    setState(() => _updatingStatus = true);
+    try {
+      await ref
+          .read(firestoreServiceProvider)
+          .updateCaseStatus(widget.profileId, status);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Estado actualizado: $status')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingStatus = false);
     }
   }
 
@@ -171,8 +178,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                       const SizedBox(height: 16),
                     ],
                     // Status update
-                    Text('Estado del caso',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Row(
+                      children: [
+                        Text('Estado del caso',
+                            style: Theme.of(context).textTheme.titleLarge),
+                        if (_updatingStatus) ...[
+                          const SizedBox(width: 10),
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(4),
@@ -191,9 +210,11 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                             .map((s) =>
                                 DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
-                        onChanged: (v) {
-                          if (v != null) _updateStatus(v);
-                        },
+                        onChanged: _updatingStatus
+                            ? null
+                            : (v) {
+                                if (v != null) _updateStatus(v);
+                              },
                       ),
                     ),
                     const SizedBox(height: 24),

@@ -213,8 +213,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                         _StatChip(
                           label: 'En proceso',
                           count: allProfiles
-                              .where((p) => p.caseStatus ==
-                                  AppConstants.caseAnalysisInProgress)
+                              .where((p) =>
+                                  AppConstants.isCaseInProgress(p.caseStatus))
                               .length,
                           color: AppColors.riskMedium,
                         ),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/firestore_service.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/models/user_model.dart';
 
@@ -17,11 +18,13 @@ class ClientHomeScreen extends ConsumerStatefulWidget {
 
 class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
   UserModel? _user;
+  UserModel? _advisor;
 
   @override
   void initState() {
     super.initState();
     _loadUser();
+    _loadAdvisor();
   }
 
   Future<void> _loadUser() async {
@@ -30,6 +33,34 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
       final user = await auth.getUserData(auth.currentUser!.uid);
       if (mounted) setState(() => _user = user);
     }
+  }
+
+  Future<void> _loadAdvisor() async {
+    final advisor =
+        await ref.read(firestoreServiceProvider).getFirstAdvisorUser();
+    if (mounted) setState(() => _advisor = advisor);
+  }
+
+  void _openChatWithAdvisor(BuildContext context) {
+    final a = _advisor;
+    if (a == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No hay un asesor disponible. Intenta más tarde o contacta soporte.',
+          ),
+        ),
+      );
+      return;
+    }
+    context.push(
+      AppRoutes.chat,
+      extra: {
+        'otherUserId': a.id,
+        'otherUserName': a.name.isNotEmpty ? a.name : 'Asesor',
+        'caseId': null,
+      },
+    );
   }
 
   @override
@@ -219,14 +250,7 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
                       title: 'Chat con\nasesor',
                       icon: Icons.chat_bubble_outline,
                       color: const Color(0xFF66BB6A),
-                      onTap: () => context.push(
-                        AppRoutes.chat,
-                        extra: {
-                          'otherUserId': 'advisor',
-                          'otherUserName': 'Asesor',
-                          'caseId': null,
-                        },
-                      ),
+                      onTap: () => _openChatWithAdvisor(context),
                       delay: 150,
                     ),
                   ]),

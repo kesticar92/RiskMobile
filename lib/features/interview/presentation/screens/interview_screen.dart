@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../shared/widgets/gradient_button.dart';
@@ -68,7 +69,7 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
         curve: Curves.easeInOutCubic,
       );
     } else {
-      context.pop();
+      popOrGo(context, AppRoutes.clientHome);
     }
   }
 
@@ -97,7 +98,15 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
       final savedId = await fs.saveFinancialProfile(profile);
       if (!mounted) return;
-      context.go(AppRoutes.calculator, extra: savedId);
+      // Quitar la entrevista de la pila y abrir calculadora con el caso guardado.
+      // Así el "atrás" vuelve al home (o a la calculadora vacía si vino de ahí).
+      if (context.canPop()) {
+        context.pop();
+        if (!mounted) return;
+        context.pushReplacement(AppRoutes.calculator, extra: savedId);
+      } else {
+        context.go(AppRoutes.calculator, extra: savedId);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

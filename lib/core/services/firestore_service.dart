@@ -133,4 +133,15 @@ class FirestoreService {
         .snapshots()
         .map((s) => s.docs.map(UserModel.fromFirestore).toList());
   }
+
+  /// Primer usuario con rol asesor (para que el cliente abra el mismo chatId que el asesor real).
+  Future<UserModel?> getFirstAdvisorUser() async {
+    final q = await _db
+        .collection(AppConstants.colUsers)
+        .where('role', isEqualTo: AppConstants.roleAdvisor)
+        .limit(1)
+        .get();
+    if (q.docs.isEmpty) return null;
+    return UserModel.fromFirestore(q.docs.first);
+  }
 }

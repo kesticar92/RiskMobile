@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
@@ -104,7 +105,7 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: () => popOrGo(context, AppRoutes.clientHome),
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(

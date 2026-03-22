@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/glass_card.dart';
 
