@@ -183,4 +183,146 @@ Durante la sesión actual se implementaron 3 requerimientos funcionales de la en
 
 ---
 
-*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth y sesión 2: entrevista RF05-RF10-RF07).*
+## 11. Avance sesión de hoy (RF13, RF15, RF17)
+
+En esta sesión se completaron y validaron 3 requerimientos funcionales adicionales:
+
+- **RF13 (Cálculo de endeudamiento):**
+  - Se confirmó visualización del nivel de endeudamiento (%), gauge por color y referencias de ideal/máximo.
+  - Se ajustó `availableCapacity` para que nunca sea negativa (si el cálculo da negativo, se muestra y guarda como `0`).
+
+- **RF15 (Score RiskMobile):**
+  - Se corrigió el cálculo para incluir la antigüedad laboral (`seniorityMonths`) al generar score.
+  - Se agregó la nota informativa en la pantalla de perfil financiero: score orientativo y no equivalente al score oficial de centrales.
+
+- **RF17 (Simulador dinámico):**
+  - Se validó funcionamiento de sliders de tasa, plazo y monto.
+  - Se validó selector de tipo de crédito, presets de plazo y actualización en tiempo real de:
+    - cuota mensual estimada
+    - monto máximo viable
+    - total a pagar
+    - comparación visual monto deseado vs viable.
+
+**Resultado:** RF13, RF15 y RF17 funcionando y validados en ejecución (`flutter run -d chrome`).
+
+---
+
+## 12. Avance sesión del **22 de marzo de 2026** (domingo)
+
+### Bloque asesor / CRM / chat (rama `kevin-main`)
+
+| RF | Contenido |
+|----|-----------|
+| **RF23** | Panel de clientes: estadística **En proceso** según casos no cerrados (`isCaseInProgress`), búsqueda y filtros. |
+| **RF25** | Detalle de cliente: cambio de **estado del caso** con indicador de carga y dropdown deshabilitado mientras guarda. |
+| **RF26** | Chat: mensajes hasta **500 caracteres** (contador + validación); cliente usa **UID real del asesor** desde Firestore (`getFirstAdvisorUser`). |
+
+**Navegación:** helper `navigation_helpers.dart` (`popOrGo`, `popOrHomeAsync`); flujo **entrevista → calculadora** sin perder historial; botón atrás en calculadora; `tools/` ignorado en git (`.gitignore`).
+
+### Simulador — cupo por línea de crédito
+
+- Archivo `credit_line_params.dart`: **tasa y plazo de referencia por tipo de crédito** (Vivienda, Vehículo, Microcrédito con tope, etc.).
+- El **cupo máximo / monto viable** se recalcula al cambiar la **línea de crédito**; plazos y atajos respetan min/max del producto.
+
+### Documentos y Firebase Storage (RF08, RF09, RF35)
+
+| RF | Contenido |
+|----|-----------|
+| **RF08** | Cámara y galería con validación de formato (JPG/PNG/PDF según flujo). |
+| **RF09** | Selector de archivos nativo (PDF, JPG, PNG, JPEG). |
+| **RF35** | Subida a **Firebase Storage** en `documents/{userId}/{caseId}/...`; metadatos en colección Firestore `documents`; caso resuelto con último caso del cliente o carpeta `pending`. |
+
+**Archivos relevantes:** `storage_service.dart`, `storage.rules`, `docs/REGLAS_DOCUMENTOS_FIRESTORE.md`, dependencia `path` en `pubspec.yaml`.
+
+### Detalle a nivel de código (sesión 22-mar-2026)
+
+Tabla de **archivos tocados o nuevos** y qué hace cada cambio (para revisión en IDE o exposición).
+
+#### Constantes y utilidades
+
+| Archivo | Cambio en código |
+|---------|------------------|
+| `lib/core/constants/app_constants.dart` | `isCaseInProgress(caseStatus)` para estadísticas CRM; `chatMessageMaxLength = 500` para RF26. |
+| `lib/core/constants/credit_line_params.dart` | **Nuevo.** Clases `CreditLineParams` y `CreditLineParamsRegistry.forLine(...)`: tasa referencia, plazo min/max/default y `maxAmountCap` por tipo de crédito. |
+| `lib/core/router/navigation_helpers.dart` | **Nuevo.** `popOrGo(context, fallbackRoute)` y `popOrHomeAsync(context, ref)` para no dejar el botón atrás sin efecto cuando la pila quedó vacía tras `go()`. |
+
+#### Servicios (Firestore / Storage)
+
+| Archivo | Cambio en código |
+|---------|------------------|
+| `lib/core/services/firestore_service.dart` | `getFirstAdvisorUser()`: query `users` con `role == advisor`, limit 1. `getLatestCaseIdForClient(clientId)`: último documento en `cases` por `clientId` + `createdAt`. `saveDocumentMetadata(...)`: insert en colección `documents` con URL, path y estado. |
+| `lib/core/services/storage_service.dart` | **Nuevo.** `StorageService.uploadCaseDocument(...)`: `putFile` a `documents/{userId}/{caseFolder}/{uuid}_{nombre}` + `saveDocumentMetadata`; progreso vía callback; `maxFileBytes` 15 MB; `kIsWeb` lanza `UnsupportedError` (subida móvil). |
+
+#### Pantallas — asesor y chat
+
+| Archivo | Cambio en código |
+|---------|------------------|
+| `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart` | Chip **En proceso**: cuenta perfiles donde `AppConstants.isCaseInProgress(p.caseStatus)` en lugar de solo “Análisis en proceso”. |
+| `lib/features/advisor/presentation/screens/client_detail_screen.dart` | Estado `_updatingStatus`; `DropdownButtonFormField` con `onChanged: null` mientras guarda; `try/finally` en `_updateStatus`; `mounted` tras `_load()`. |
+| `lib/features/auth/presentation/screens/client_home_screen.dart` | `_loadAdvisor()` + `_openChatWithAdvisor()`: navega a chat con `otherUserId` = UID real del asesor (no string `'advisor'`). |
+| `lib/features/chat/presentation/screens/chat_screen.dart` | `maxLength` en `TextField`, contador `actual/500`, validación en `_sendMessage` con `AppConstants.chatMessageMaxLength`; listener `_onMessageChanged` para refrescar contador. Atrás: en código actual `context.pop()` (si se desea mismo patrón que otras pantallas, cambiar a `popOrGo` + `AppRoutes.clientHome`). |
+
+#### Pantallas — flujo cliente (entrevista, calculadora, simulador, documentos)
+
+| Archivo | Cambio en código |
+|---------|------------------|
+| `lib/features/interview/presentation/screens/interview_screen.dart` | `_back()` usa `popOrGo(..., clientHome)`; tras guardar perfil: `canPop` → `pop()` + `pushReplacement(calculator)`; si no → `go(calculator)`. |
+| `lib/features/calculator/presentation/screens/calculator_screen.dart` | Cabecera atrás con `popOrGo` + `InkWell`; botón vacío “Realizar entrevista” usa `push` (no `go`). |
+| `lib/features/simulator/presentation/screens/simulator_screen.dart` | Import `credit_line_params`; getters `_lineParams`, `_maxCredit` con tope por línea; `_syncLineParamsFromSelection` al cambiar chip; sliders de plazo acotados a min/max del producto; atajos `_quickTermPresetMonths()`; `initState` inicializa tasa/plazo según primera línea. |
+| `lib/features/documents/presentation/screens/documents_screen.dart` | Lista `_DocItem` con `id` único; validación `_allowedExt`; `_resolveCase()` + `_resolvedCaseFolder`; `StorageService` en guardar; barra `LinearProgressIndicator`; `GradientButton` con `isLoading`; `popOrGo` en atrás. |
+
+#### Configuración del repo y Firebase
+
+| Archivo | Cambio |
+|---------|--------|
+| `.gitignore` | Entrada `/tools/` para no versionar scripts locales. |
+| `pubspec.yaml` | Dependencia directa `path: ^1.9.0` (nombres de archivo seguros en Storage). |
+| `storage.rules` | **Nuevo.** Reglas Storage: lectura/escritura solo si `request.auth.uid == userId` en ruta `documents/{userId}/{caseId}/{fileName}`. |
+| `docs/REGLAS_DOCUMENTOS_FIRESTORE.md` | **Nuevo.** Fragmento sugerido para reglas de la colección `documents` y nota de índice en `cases`. |
+
+#### Pantallas que aún usan solo `context.pop()` (sin `popOrGo`)
+
+Pueden funcionar bien si siempre se abrieron con `push`; si en algún flujo se usó `go()`, el atrás puede fallar. Archivos típicos: `register_screen.dart`, `payments_screen.dart`, `settings_screen.dart`, `client_detail_screen.dart`, `chat_screen.dart` (cabecera).
+
+> **Rama:** la parte asesor/chat/navegación suele ir en **`kevin-main`**; documentos + Storage + `credit_line_params` + simulador en **`brandon-main`** según cómo hayan mergeado. Ajusta la rama si en tu repo todo está en una sola.
+
+---
+
+## 13. Checkpoint de sesión — subida **Brandon** pendiente (cuando vuelvas)
+
+**Estado guardado:** sesión cerrada aquí; los cambios de código del bloque Brandon (RF08, RF09, RF35, simulador por línea, `storage.rules`, docs, `RESUMEN_ENTREGABLE` sección 12, etc.) están en el **working copy** o en commits locales según lo que hayas hecho — **al volver** sube a la rama **`brandon-main`**.
+
+### Pasos sugeridos (PowerShell, `D:\RiskMobile`)
+
+1. Revisar identidad Git (Brandon): `git config user.name` y `git config user.email` (local del repo o global).
+2. Cambiar a rama y traer remoto si aplica:
+   ```powershell
+   cd D:\RiskMobile
+   git fetch origin
+   git checkout brandon-main
+   git pull origin brandon-main
+   ```
+3. Si los commits están en otra rama, **merge** o **cherry-pick** lo necesario hacia `brandon-main`.
+4. Añadir archivos del bloque Brandon y documentación:
+   ```powershell
+   git add lib/core/constants/credit_line_params.dart lib/core/services/storage_service.dart lib/core/services/firestore_service.dart lib/features/documents lib/features/simulator storage.rules docs pubspec.yaml .gitignore RESUMEN_ENTREGABLE.md
+   ```
+   *(Ajusta la lista con `git status`.)*
+5. Commit (mensaje claro, sin trailers de IA):
+   ```powershell
+   git commit -m "feat(documents): RF08 RF09 RF35 Storage y Firestore; simulador por linea de credito"
+   ```
+6. Push:
+   ```powershell
+   git push origin brandon-main
+   ```
+
+### Después del push (Firebase)
+
+- Desplegar **`storage.rules`** (`firebase deploy --only storage` o consola).
+- Fusionar en Firestore las reglas de **`docs/REGLAS_DOCUMENTOS_FIRESTORE.md`** para la colección `documents`.
+- Crear índice compuesto en **`cases`** si el cliente lo pide al subir documentos.
+
+---
+
+*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17, **sesión 4 (22-mar-2026):** RF23-RF25-RF26, navegación, simulador por línea de crédito, RF08-RF09-RF35). **Checkpoint:** sección 13 — subida Brandon pendiente.*

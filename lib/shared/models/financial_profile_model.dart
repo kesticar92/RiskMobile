@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math' as math;
 import '../../core/constants/app_constants.dart';
 
 class FinancialObligation {
@@ -51,7 +52,7 @@ class FinancialProfileModel {
       monthlyIncome > 0 ? totalMonthlyPayments / monthlyIncome : 0;
 
   double get availableCapacity =>
-      (monthlyIncome * AppConstants.debtCapacityLimit) - totalMonthlyPayments;
+      math.max(0, (monthlyIncome * AppConstants.debtCapacityLimit) - totalMonthlyPayments);
 
   // Intención del cliente
   double desiredAmount;
