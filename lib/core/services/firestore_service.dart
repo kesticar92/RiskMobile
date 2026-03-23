@@ -64,6 +64,39 @@ class FirestoreService {
     });
   }
 
+  /// Ultimo caso del cliente (para adjuntar documentos a ese caso). RF35.
+  Future<String?> getLatestCaseIdForClient(String clientId) async {
+    final q = await _db
+        .collection(AppConstants.colCases)
+        .where('clientId', isEqualTo: clientId)
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .get();
+    if (q.docs.isEmpty) return null;
+    return q.docs.first.id;
+  }
+
+  /// Registro de documento subido (metadatos + URL). RF35.
+  Future<void> saveDocumentMetadata({
+    required String userId,
+    required String caseId,
+    required String fileName,
+    required String storagePath,
+    required String downloadUrl,
+    required String mimeType,
+  }) async {
+    await _db.collection(AppConstants.colDocuments).add({
+      'userId': userId,
+      'caseId': caseId,
+      'fileName': fileName,
+      'storagePath': storagePath,
+      'downloadUrl': downloadUrl,
+      'mimeType': mimeType,
+      'status': 'Pendiente de revision',
+      'createdAt': Timestamp.now(),
+    });
+  }
+
   // ---- Messages / Chat ----
 
   Stream<QuerySnapshot> streamMessages(String chatId) {
