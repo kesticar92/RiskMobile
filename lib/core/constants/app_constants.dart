@@ -49,6 +49,27 @@ class AppConstants {
     caseCreditRejected,
   ];
 
+  /// Casos aún no cerrados (no aprobado ni rechazado) — para RF31 / panel CRM.
+  static bool isCaseInProgress(String? caseStatus) {
+    if (caseStatus == null || caseStatus.isEmpty) return false;
+    return caseStatus != caseCreditApproved &&
+        caseStatus != caseCreditRejected;
+  }
+
+  /// RF26: longitud máxima por mensaje en chat.
+  static const int chatMessageMaxLength = 500;
+
+  // Document review states (RF38)
+  static const String documentPendingReview = 'Pendiente de revisión';
+  static const String documentApproved = 'Aprobado';
+  static const String documentRejectedNeedsResend = 'Rechazado (requiere reenvío)';
+
+  static const List<String> documentStates = [
+    documentPendingReview,
+    documentApproved,
+    documentRejectedNeedsResend,
+  ];
+
   // Score calculation weights
   static const double weightPaymentCapacity = 0.40;
   static const double weightDebtLevel = 0.30;

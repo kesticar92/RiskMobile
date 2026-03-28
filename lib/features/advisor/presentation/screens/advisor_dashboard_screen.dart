@@ -177,6 +177,17 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
       stream: ref.read(firestoreServiceProvider).streamAllProfiles(),
       builder: (context, snapshot) {
         final allProfiles = snapshot.data ?? [];
+        final approvedCount = allProfiles
+            .where((p) => p.caseStatus == AppConstants.caseCreditApproved)
+            .length;
+        final inProgressCount = allProfiles
+            .where((p) => AppConstants.isCaseInProgress(p.caseStatus))
+            .length;
+        final total = allProfiles.length;
+        final approvedPct =
+            total > 0 ? ((approvedCount / total) * 100).round() : 0;
+        final inProgressPct =
+            total > 0 ? ((inProgressCount / total) * 100).round() : 0;
         final filtered = allProfiles.where((p) {
           final matchStatus = widget.filterStatus == 'Todos' ||
               p.caseStatus == widget.filterStatus;
@@ -197,26 +208,23 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                       children: [
                         _StatChip(
                           label: 'Total',
-                          count: allProfiles.length,
+                          count: total,
                           color: AppColors.primaryBlue,
+                          subtitle: 'Base cartera',
                         ),
                         const SizedBox(width: 8),
                         _StatChip(
                           label: 'Aprobados',
-                          count: allProfiles
-                              .where((p) => p.caseStatus ==
-                                  AppConstants.caseCreditApproved)
-                              .length,
+                          count: approvedCount,
                           color: AppColors.riskLow,
+                          subtitle: '$approvedPct%',
                         ),
                         const SizedBox(width: 8),
                         _StatChip(
                           label: 'En proceso',
-                          count: allProfiles
-                              .where((p) => p.caseStatus ==
-                                  AppConstants.caseAnalysisInProgress)
-                              .length,
+                          count: inProgressCount,
                           color: AppColors.riskMedium,
+                          subtitle: '$inProgressPct%',
                         ),
                       ],
                     ),
@@ -330,8 +338,14 @@ class _StatChip extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
+  final String? subtitle;
 
-  const _StatChip({required this.label, required this.count, required this.color});
+  const _StatChip({
+    required this.label,
+    required this.count,
+    required this.color,
+    this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +366,11 @@ class _StatChip extends StatelessWidget {
             ),
             Text(label,
                 style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            if (subtitle != null)
+              Text(
+                subtitle!,
+                style: TextStyle(fontSize: 10, color: color),
+              ),
           ],
         ),
       ),

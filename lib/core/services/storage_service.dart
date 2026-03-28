@@ -28,6 +28,7 @@ class StorageService {
     required String originalFileName,
     required String userId,
     required String caseFolder,
+    required String documentType,
     void Function(double progress)? onProgress,
   }) async {
     if (kIsWeb) {
@@ -76,6 +77,7 @@ class StorageService {
       storagePath: storagePath,
       downloadUrl: downloadUrl,
       mimeType: mime,
+      documentType: documentType,
     );
   }
 

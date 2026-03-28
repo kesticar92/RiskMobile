@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../shared/widgets/gradient_button.dart';
@@ -41,8 +42,23 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
   final _totalPages = 3;
 
+  void _onFormFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _seniorityCtrl.addListener(_onFormFieldChanged);
+    _incomeCtrl.addListener(_onFormFieldChanged);
+    _desiredAmountCtrl.addListener(_onFormFieldChanged);
+  }
+
   @override
   void dispose() {
+    _seniorityCtrl.removeListener(_onFormFieldChanged);
+    _incomeCtrl.removeListener(_onFormFieldChanged);
+    _desiredAmountCtrl.removeListener(_onFormFieldChanged);
     _pageController.dispose();
     _seniorityCtrl.dispose();
     _incomeCtrl.dispose();
@@ -68,7 +84,7 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
         curve: Curves.easeInOutCubic,
       );
     } else {
-      context.pop();
+      popOrGo(context, AppRoutes.clientHome);
     }
   }
 
@@ -97,7 +113,15 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
       final savedId = await fs.saveFinancialProfile(profile);
       if (!mounted) return;
-      context.go(AppRoutes.calculator, extra: savedId);
+      // Quitar la entrevista de la pila y abrir calculadora con el caso guardado.
+      // Así el "atrás" vuelve al home (o a la calculadora vacía si vino de ahí).
+      if (context.canPop()) {
+        context.pop();
+        if (!mounted) return;
+        context.pushReplacement(AppRoutes.calculator, extra: savedId);
+      } else {
+        context.go(AppRoutes.calculator, extra: savedId);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -311,6 +335,7 @@ class _ActivityPage extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => onActivitySelected(activity),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -356,8 +381,11 @@ class _ActivityPage extends StatelessWidget {
                         const Icon(Icons.check_circle, color: Colors.white, size: 20),
                     ],
                   ),
-                ),
-              ).animate().fadeIn(delay: Duration(milliseconds: e.key * 60)).slideX(begin: 0.2),
+                )
+                    .animate()
+                    .fadeIn(delay: Duration(milliseconds: e.key * 60))
+                    .slideX(begin: 0.2),
+              ),
             );
           }),
           const SizedBox(height: 20),

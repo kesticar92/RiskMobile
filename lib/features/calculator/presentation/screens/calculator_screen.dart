@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/financial_profile_model.dart';
@@ -67,16 +68,20 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => popOrGo(context, AppRoutes.clientHome),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Icon(Icons.arrow_back_ios_new, size: 16),
               ),
-              child: const Icon(Icons.arrow_back_ios_new, size: 16),
             ),
           ),
           const SizedBox(width: 14),
@@ -98,7 +103,7 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
           const SizedBox(height: 20),
           GradientButton(
             label: 'Realizar entrevista',
-            onPressed: () => context.go(AppRoutes.interview),
+            onPressed: () => context.push(AppRoutes.interview),
             width: 200,
           ),
         ],
@@ -251,6 +256,16 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
             onPressed: () => context.push(AppRoutes.simulator, extra: _profile!.id),
             icon: Icons.calculate_outlined,
           ).animate().fadeIn(delay: 300.ms),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => context.go(AppRoutes.clientHome),
+            icon: const Icon(Icons.home_outlined),
+            label: const Text('Volver al menú principal'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ).animate().fadeIn(delay: 330.ms),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => context.push(

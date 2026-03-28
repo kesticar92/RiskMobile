@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/credit_line_params.dart';
 import '../../../../core/services/firestore_service.dart';
@@ -24,6 +25,7 @@ class SimulatorScreen extends ConsumerStatefulWidget {
 class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
   FinancialProfileModel? _profile;
   bool _isLoading = true;
+  bool _savingSimulation = false;
 
   // Simulator controls (tasa/plazo por línea de crédito)
   double _interestRate = AppConstants.defaultInterestRate;
@@ -125,6 +127,31 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _saveSimulationToCase() async {
+    if (_profile == null || widget.profileId == null) return;
+    final desired = _customAmount > 0 ? _customAmount : _profile!.desiredAmount;
+    setState(() => _savingSimulation = true);
+    try {
+      await ref.read(firestoreServiceProvider).saveSimulationResult(
+            caseId: widget.profileId!,
+            desiredAmount: desired,
+            desiredCreditType: _selectedCreditType,
+            estimatedViableAmount: _maxCredit,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Simulación guardada en tu caso.')),
+      );
+      setState(() {
+        _profile!.desiredAmount = desired;
+        _profile!.desiredCreditType = _selectedCreditType;
+        _profile!.estimatedViableAmount = _maxCredit;
+      });
+    } finally {
+      if (mounted) setState(() => _savingSimulation = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -150,7 +177,7 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: () => popOrGo(context, AppRoutes.clientHome),
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -501,10 +528,61 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
                     color: AppColors.primaryBlue,
                     maxValue: _maxCredit > 0 ? _maxCredit * 1.5 : _profile!.desiredAmount + 1,
                   ),
+                  const SizedBox(height: 12),
+                  Builder(
+                    builder: (context) {
+                      final desired = _customAmount > 0 ? _customAmount : _profile!.desiredAmount;
+                      final viable = desired <= _maxCredit;
+                      final gap =
+                          ((desired - _maxCredit).clamp(0.0, double.infinity))
+                              .toDouble();
+                      return Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: viable
+                              ? AppColors.riskLow.withOpacity(0.1)
+                              : AppColors.riskHigh.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          viable
+                              ? 'Resultado: Viable para la línea seleccionada.'
+                              : 'Resultado: No viable. Brecha estimada: ${AppFormatters.compactCurrency(gap)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: viable ? AppColors.riskLow : AppColors.riskHigh,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ).animate().fadeIn(delay: 250.ms),
             const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: _savingSimulation ? null : _saveSimulationToCase,
+              icon: _savingSimulation
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(
+                _savingSimulation
+                    ? 'Guardando...'
+                    : 'Guardar simulación en mi caso',
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
           GradientButton(
             label: 'Hablar con un asesor',
@@ -518,6 +596,18 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
             ),
             icon: Icons.chat_bubble_outline,
           ).animate().fadeIn(delay: 300.ms),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => context.go(AppRoutes.clientHome),
+            icon: const Icon(Icons.home_outlined),
+            label: const Text('Volver al menú principal'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ).animate().fadeIn(delay: 320.ms),
           const SizedBox(height: 40),
         ],
       ),

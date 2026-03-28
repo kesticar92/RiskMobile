@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
@@ -30,9 +31,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String? _currentUserId;
   String? _currentUserName;
 
+  void _onMessageChanged() => setState(() {});
+
   @override
   void initState() {
     super.initState();
+    _msgCtrl.addListener(_onMessageChanged);
     _loadCurrentUser();
   }
 
@@ -54,6 +58,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty || _currentUserId == null) return;
+    if (text.length > AppConstants.chatMessageMaxLength) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'El mensaje no puede superar ${AppConstants.chatMessageMaxLength} caracteres.',
+          ),
+        ),
+      );
+      return;
+    }
 
     _msgCtrl.clear();
     await ref.read(firestoreServiceProvider).sendMessage(
@@ -76,6 +91,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    _msgCtrl.removeListener(_onMessageChanged);
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -230,50 +246,77 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   top: BorderSide(color: AppColors.divider),
                 ),
               ),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceCard,
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: TextField(
-                        controller: _msgCtrl,
-                        minLines: 1,
-                        maxLines: 4,
-                        textCapitalization: TextCapitalization.sentences,
-                        decoration: const InputDecoration(
-                          hintText: 'Escribe un mensaje...',
-                          border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: _sendMessage,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceCard,
+                            borderRadius: BorderRadius.circular(26),
+                            border: Border.all(color: AppColors.border),
                           ),
-                        ],
+                          child: TextField(
+                            controller: _msgCtrl,
+                            minLines: 1,
+                            maxLines: 4,
+                            maxLength: AppConstants.chatMessageMaxLength,
+                            buildCounter: (
+                              context, {
+                              required currentLength,
+                              required isFocused,
+                              maxLength,
+                            }) =>
+                                const SizedBox.shrink(),
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              hintText: 'Escribe un mensaje...',
+                              border: InputBorder.none,
+                              contentPadding:
+                                  EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onSubmitted: (_) => _sendMessage(),
+                          ),
+                        ),
                       ),
-                      child: const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: _sendMessage,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue.withOpacity(0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.send_rounded,
+                              color: Colors.white, size: 20),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 58),
+                    child: Text(
+                      '${_msgCtrl.text.length}/${AppConstants.chatMessageMaxLength}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _msgCtrl.text.length >=
+                                AppConstants.chatMessageMaxLength
+                            ? AppColors.riskHigh
+                            : AppColors.textLight,
+                      ),
                     ),
                   ),
                 ],
