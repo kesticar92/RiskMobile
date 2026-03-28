@@ -10,6 +10,7 @@ import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/services/storage_service.dart';
+import '../../../../shared/models/financial_profile_model.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/glass_card.dart';
 
@@ -25,6 +26,13 @@ class DocumentsScreen extends ConsumerStatefulWidget {
 class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   static const _allowedExt = {'pdf', 'jpg', 'jpeg', 'png'};
   static const _uuid = Uuid();
+  static const _documentTypes = [
+    'Extracto bancario',
+    'Certificado laboral',
+    'RUT / Camara de comercio',
+    'Resolucion de pension',
+    'Otro soporte',
+  ];
 
   final List<_DocItem> _documents = [];
   final _picker = ImagePicker();
@@ -33,6 +41,12 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   bool _resolvingCase = true;
   bool _uploading = false;
   double _uploadProgress = 0;
+  bool _requiresBankStatement = false;
+  int _requiredExtractCount = 0;
+  String _selectedDocumentType = _documentTypes.first;
+  int _currentUploadIndex = 0;
+  int _currentUploadTotal = 0;
+  DateTime? _uploadStartedAt;
 
   @override
   void initState() {
@@ -60,14 +74,23 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       }
       return;
     }
-    final id =
-        await ref.read(firestoreServiceProvider).getLatestCaseIdForClient(uid);
+    final fs = ref.read(firestoreServiceProvider);
+    final id = await fs.getLatestCaseIdForClient(uid);
+    FinancialProfileModel? profile;
+    if (id != null) {
+      profile = await fs.getFinancialProfile(id);
+    }
     if (!mounted) return;
     setState(() {
       _resolvedCaseFolder = id ?? 'pending';
       _resolvingCase = false;
+      _requiresBankStatement = (profile?.obligations.isNotEmpty ?? false);
+      _requiredExtractCount = profile?.obligations.length ?? 0;
     });
   }
+
+  int get _attachedExtractCount =>
+      _documents.where((d) => d.documentType == 'Extracto bancario').length;
 
   bool _isAllowedPath(String pathOrName) {
     final parts = pathOrName.split('.');
@@ -96,6 +119,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
           name: 'Foto_${DateTime.now().millisecondsSinceEpoch}.jpg',
           type: 'image',
           path: path,
+          documentType: _selectedDocumentType,
         )));
   }
 
@@ -116,6 +140,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
           name: name.isNotEmpty ? name : 'imagen.jpg',
           type: _typeFromName(name.isNotEmpty ? name : path),
           path: path,
+          documentType: _selectedDocumentType,
         )));
   }
 
@@ -136,6 +161,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
           name: f.name,
           type: _typeFromName(f.name),
           path: path,
+          documentType: _selectedDocumentType,
         )));
   }
 
@@ -156,10 +182,20 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       return;
     }
     if (_documents.isEmpty) return;
+    if (_requiresBankStatement &&
+        _attachedExtractCount < _requiredExtractCount) {
+      _showErr(
+        'Debes adjuntar minimo $_requiredExtractCount extracto(s) bancario(s) por tus obligaciones declaradas.',
+      );
+      return;
+    }
 
     setState(() {
       _uploading = true;
       _uploadProgress = 0;
+      _currentUploadIndex = 0;
+      _currentUploadTotal = _documents.length;
+      _uploadStartedAt = DateTime.now();
     });
 
     final storage = ref.read(storageServiceProvider);
@@ -168,11 +204,17 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     try {
       for (var i = 0; i < _documents.length; i++) {
         final doc = _documents[i];
+        if (mounted) {
+          setState(() {
+            _currentUploadIndex = i + 1;
+          });
+        }
         await storage.uploadCaseDocument(
           localPath: doc.path,
           originalFileName: doc.name,
           userId: uid,
           caseFolder: _resolvedCaseFolder!,
+          documentType: doc.documentType,
           onProgress: (p) {
             if (mounted) {
               setState(() => _uploadProgress = (i + p) / total);
@@ -197,6 +239,9 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         setState(() {
           _uploading = false;
           _uploadProgress = 0;
+          _currentUploadIndex = 0;
+          _currentUploadTotal = 0;
+          _uploadStartedAt = null;
         });
       }
     }
@@ -204,6 +249,20 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
   void _removeById(String id) {
     setState(() => _documents.removeWhere((d) => d.id == id));
+  }
+
+  String _estimateRemaining() {
+    final started = _uploadStartedAt;
+    if (started == null || _uploadProgress <= 0) return '--';
+    final elapsedMs = DateTime.now().difference(started).inMilliseconds;
+    if (elapsedMs <= 0) return '--';
+    final totalEstimateMs = (elapsedMs / _uploadProgress).round();
+    final remainingMs = (totalEstimateMs - elapsedMs).clamp(0, 99999999);
+    final secs = (remainingMs / 1000).round();
+    if (secs < 60) return '${secs}s';
+    final min = secs ~/ 60;
+    final sec = secs % 60;
+    return '${min}m ${sec}s';
   }
 
   @override
@@ -244,9 +303,22 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
               LinearProgressIndicator(value: _uploadProgress.clamp(0.0, 1.0)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                child: Text(
-                  'Subiendo... ${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _currentUploadTotal > 0
+                          ? 'Subiendo $_currentUploadIndex/$_currentUploadTotal ... ${(_uploadProgress * 100).toStringAsFixed(0)}%'
+                          : 'Subiendo... ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                      style:
+                          TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    if (_uploadStartedAt != null && _uploadProgress > 0)
+                      Text(
+                        'Tiempo estimado restante: ${_estimateRemaining()}',
+                        style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -313,7 +385,48 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                           ),
                         ).animate().fadeIn(
                             delay: Duration(milliseconds: e.key * 60))),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Tipo de soporte a cargar',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _documentTypes.map((type) {
+                          final isSelected = _selectedDocumentType == type;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(type),
+                              selected: isSelected,
+                              onSelected: _uploading
+                                  ? null
+                                  : (_) => setState(
+                                      () => _selectedDocumentType = type,
+                                    ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                     const SizedBox(height: 20),
+                    if (_requiresBankStatement) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.riskMedium.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Se requieren $_requiredExtractCount extracto(s) bancario(s). Adjuntos: $_attachedExtractCount.',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -385,6 +498,13 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                                         style: TextStyle(
                                             fontSize: 11,
                                             color: AppColors.textLight)),
+                                    Text(
+                                      doc.documentType,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -428,12 +548,14 @@ class _DocItem {
   final String name;
   final String type;
   final String path;
+  final String documentType;
 
   _DocItem({
     required this.id,
     required this.name,
     required this.type,
     required this.path,
+    required this.documentType,
   });
 }
 

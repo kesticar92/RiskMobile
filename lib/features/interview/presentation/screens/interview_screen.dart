@@ -41,8 +41,23 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
   final _totalPages = 3;
 
+  void _onFormFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _seniorityCtrl.addListener(_onFormFieldChanged);
+    _incomeCtrl.addListener(_onFormFieldChanged);
+    _desiredAmountCtrl.addListener(_onFormFieldChanged);
+  }
+
   @override
   void dispose() {
+    _seniorityCtrl.removeListener(_onFormFieldChanged);
+    _incomeCtrl.removeListener(_onFormFieldChanged);
+    _desiredAmountCtrl.removeListener(_onFormFieldChanged);
     _pageController.dispose();
     _seniorityCtrl.dispose();
     _incomeCtrl.dispose();
@@ -311,6 +326,7 @@ class _ActivityPage extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => onActivitySelected(activity),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -356,8 +372,11 @@ class _ActivityPage extends StatelessWidget {
                         const Icon(Icons.check_circle, color: Colors.white, size: 20),
                     ],
                   ),
-                ),
-              ).animate().fadeIn(delay: Duration(milliseconds: e.key * 60)).slideX(begin: 0.2),
+                )
+                    .animate()
+                    .fadeIn(delay: Duration(milliseconds: e.key * 60))
+                    .slideX(begin: 0.2),
+              ),
             );
           }),
           const SizedBox(height: 20),
