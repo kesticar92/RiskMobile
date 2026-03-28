@@ -34,7 +34,7 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
 
   /// Nombre para el saludo: primero Firestore, luego Auth (displayName), luego "Cliente".
   String get _greetingName {
-    final fromDb = _user?.name?.trim();
+    final fromDb = _user?.name.trim();
     if (fromDb != null && fromDb.isNotEmpty) return fromDb.split(' ').first;
     final fromAuth = ref.read(authServiceProvider).currentUser?.displayName?.trim();
     if (fromAuth != null && fromAuth.isNotEmpty) return fromAuth.split(' ').first;
@@ -70,7 +70,7 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Hola, ${_greetingName} 👋',
+                                'Hola, $_greetingName 👋',
                                 style: Theme.of(context).textTheme.headlineMedium,
                               ),
                               Text(
@@ -237,6 +237,13 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
                         },
                       ),
                       delay: 150,
+                    ),
+                    _ToolCard(
+                      title: 'Historial de\nevaluaciones',
+                      icon: Icons.history_edu_outlined,
+                      color: const Color(0xFF8D6E63),
+                      onTap: () => context.push(AppRoutes.evaluationsHistory),
+                      delay: 200,
                     ),
                   ]),
                 ),

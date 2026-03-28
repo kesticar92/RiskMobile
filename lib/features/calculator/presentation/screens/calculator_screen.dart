@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/financial_profile_model.dart';
@@ -68,7 +69,7 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: () => popOrGo(context, AppRoutes.clientHome),
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -251,6 +252,16 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
             onPressed: () => context.push(AppRoutes.simulator, extra: _profile!.id),
             icon: Icons.calculate_outlined,
           ).animate().fadeIn(delay: 300.ms),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => context.go(AppRoutes.clientHome),
+            icon: const Icon(Icons.home_outlined),
+            label: const Text('Volver al menú principal'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ).animate().fadeIn(delay: 330.ms),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => context.push(
