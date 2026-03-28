@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/role_selection_screen.dart';
 import '../../features/interview/presentation/screens/interview_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
@@ -15,11 +16,13 @@ import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/auth/presentation/screens/client_home_screen.dart';
+import '../../features/history/presentation/screens/evaluations_history_screen.dart';
 
 class AppRoutes {
   static const splash = '/';
   static const login = '/login';
   static const register = '/register';
+  static const forgotPassword = '/forgot-password';
   static const roleSelection = '/role-selection';
   static const clientHome = '/client-home';
   static const interview = '/interview';
@@ -31,6 +34,7 @@ class AppRoutes {
   static const chat = '/chat';
   static const payments = '/payments';
   static const settings = '/settings';
+  static const evaluationsHistory = '/evaluations-history';
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -53,6 +57,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.register,
         pageBuilder: (context, state) => CustomTransitionPage(
           child: const RegisterScreen(),
+          transitionsBuilder: _slideTransition,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          child: const ForgotPasswordScreen(),
           transitionsBuilder: _slideTransition,
         ),
       ),
@@ -149,6 +160,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settings,
         pageBuilder: (context, state) => CustomTransitionPage(
           child: const SettingsScreen(),
+          transitionsBuilder: _slideTransition,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.evaluationsHistory,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          child: const EvaluationsHistoryScreen(),
           transitionsBuilder: _slideTransition,
         ),
       ),

@@ -25,9 +25,9 @@ Future<void> popOrHomeAsync(BuildContext context, WidgetRef ref) async {
     if (context.mounted) context.go(AppRoutes.login);
     return;
   }
-  final u = await auth.getUserData(uid);
+  final user = await auth.getUserData(uid);
   if (!context.mounted) return;
   context.go(
-    u?.isAdvisor == true ? AppRoutes.advisorDashboard : AppRoutes.clientHome,
+    user?.isAdvisor == true ? AppRoutes.advisorDashboard : AppRoutes.clientHome,
   );
 }

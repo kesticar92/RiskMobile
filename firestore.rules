@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Usuarios: cada usuario solo puede leer y escribir su propio documento (uid = auth.uid)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Añade aquí las reglas para cases, messages, commissions, etc. cuando las uses.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

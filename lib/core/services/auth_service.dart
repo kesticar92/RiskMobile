@@ -37,23 +37,28 @@ class AuthService {
       password: password,
     );
 
-    await credential.user!.updateDisplayName(name);
+    try {
+      await credential.user!.updateDisplayName(name);
 
-    final user = UserModel(
-      id: credential.user!.uid,
-      name: name,
-      email: email,
-      role: role,
-      phone: phone,
-      createdAt: DateTime.now(),
-    );
+      final user = UserModel(
+        id: credential.user!.uid,
+        name: name,
+        email: email,
+        role: role,
+        phone: phone?.isEmpty == true ? null : phone,
+        createdAt: DateTime.now(),
+      );
 
-    await _db
-        .collection(AppConstants.colUsers)
-        .doc(credential.user!.uid)
-        .set(user.toFirestore());
+      await _db
+          .collection(AppConstants.colUsers)
+          .doc(credential.user!.uid)
+          .set(user.toFirestore());
 
-    return user;
+      return user;
+    } catch (e) {
+      await credential.user?.delete();
+      rethrow;
+    }
   }
 
   Future<UserModel?> loginWithEmail({
