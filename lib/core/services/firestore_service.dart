@@ -64,6 +64,90 @@ class FirestoreService {
     });
   }
 
+  /// Ultimo caso del cliente (para adjuntar documentos a ese caso). RF35.
+  Future<String?> getLatestCaseIdForClient(String clientId) async {
+    final q = await _db
+        .collection(AppConstants.colCases)
+        .where('clientId', isEqualTo: clientId)
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .get();
+    if (q.docs.isEmpty) return null;
+    return q.docs.first.id;
+  }
+
+  /// Registro de documento subido (metadatos + URL). RF35.
+  Future<void> saveDocumentMetadata({
+    required String userId,
+    required String caseId,
+    required String fileName,
+    required String storagePath,
+    required String downloadUrl,
+    required String mimeType,
+    required String documentType,
+  }) async {
+    await _db.collection(AppConstants.colDocuments).add({
+      'userId': userId,
+      'caseId': caseId,
+      'fileName': fileName,
+      'storagePath': storagePath,
+      'downloadUrl': downloadUrl,
+      'mimeType': mimeType,
+      'documentType': documentType,
+      'status': AppConstants.documentPendingReview,
+      'createdAt': Timestamp.now(),
+    });
+  }
+
+  Stream<QuerySnapshot> streamCaseDocuments(String caseId) {
+    return _db
+        .collection(AppConstants.colDocuments)
+        .where('caseId', isEqualTo: caseId)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> updateDocumentStatus(String documentId, String newStatus) async {
+    await _db.collection(AppConstants.colDocuments).doc(documentId).update({
+      'status': newStatus,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
+  Future<void> createNotification({
+    required String userId,
+    required String title,
+    required String message,
+    String? caseId,
+    String? documentId,
+    String? type,
+  }) async {
+    await _db.collection(AppConstants.colNotifications).add({
+      'userId': userId,
+      'title': title,
+      'message': message,
+      'caseId': caseId,
+      'documentId': documentId,
+      'type': type ?? 'info',
+      'read': false,
+      'createdAt': Timestamp.now(),
+    });
+  }
+
+  Future<void> saveSimulationResult({
+    required String caseId,
+    required double desiredAmount,
+    required String desiredCreditType,
+    required double estimatedViableAmount,
+  }) async {
+    await _db.collection(AppConstants.colCases).doc(caseId).update({
+      'desiredAmount': desiredAmount,
+      'desiredCreditType': desiredCreditType,
+      'estimatedViableAmount': estimatedViableAmount,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
   // ---- Messages / Chat ----
 
   Stream<QuerySnapshot> streamMessages(String chatId) {

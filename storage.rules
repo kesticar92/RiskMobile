@@ -1,0 +1,11 @@
+rules_version = '2';
+// Firebase Storage — RF35: rutas por usuario (y subcarpeta caso).
+// Desplegar: firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /documents/{userId}/{caseId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

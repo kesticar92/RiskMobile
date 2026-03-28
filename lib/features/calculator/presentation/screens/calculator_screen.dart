@@ -258,6 +258,16 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
           ).animate().fadeIn(delay: 300.ms),
           const SizedBox(height: 12),
           OutlinedButton.icon(
+            onPressed: () => context.go(AppRoutes.clientHome),
+            icon: const Icon(Icons.home_outlined),
+            label: const Text('Volver al menú principal'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ).animate().fadeIn(delay: 330.ms),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
             onPressed: () => context.push(
               AppRoutes.chat,
               extra: {
