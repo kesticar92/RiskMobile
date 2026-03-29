@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
 import 'app_router.dart';
 
-/// Hace pop si hay historial; si no, navega al fallback.
+/// Si hay historial hace [pop]; si no (p. ej. se llegó con [GoRouter.go]), va a [fallbackRoute].
 void popOrGo(BuildContext context, String fallbackRoute) {
   if (context.canPop()) {
     context.pop();
@@ -13,7 +13,7 @@ void popOrGo(BuildContext context, String fallbackRoute) {
   }
 }
 
-/// Hace pop si hay historial; si no, redirige al home segun rol.
+/// Igual que [popOrGo] pero si no hay historial envía al home según rol (cliente / asesor).
 Future<void> popOrHomeAsync(BuildContext context, WidgetRef ref) async {
   if (context.canPop()) {
     context.pop();

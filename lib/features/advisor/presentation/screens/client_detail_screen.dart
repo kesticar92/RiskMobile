@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +24,7 @@ class ClientDetailScreen extends ConsumerStatefulWidget {
 class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   FinancialProfileModel? _profile;
   bool _isLoading = true;
+  bool _updatingStatus = false;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     final p = await ref
         .read(firestoreServiceProvider)
         .getFinancialProfile(widget.profileId);
+    if (!mounted) return;
     setState(() {
       _profile = p;
       _isLoading = false;
@@ -41,15 +44,45 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   }
 
   Future<void> _updateStatus(String status) async {
-    await ref
-        .read(firestoreServiceProvider)
-        .updateCaseStatus(widget.profileId, status);
-    await _load();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Estado actualizado: $status')),
+    setState(() => _updatingStatus = true);
+    try {
+      await ref
+          .read(firestoreServiceProvider)
+          .updateCaseStatus(widget.profileId, status);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Estado actualizado: $status')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingStatus = false);
+    }
+  }
+
+  Future<void> _updateDocumentStatus({
+    required String documentId,
+    required String clientId,
+    required String caseId,
+    required String fileName,
+    required String newStatus,
+  }) async {
+    final fs = ref.read(firestoreServiceProvider);
+    await fs.updateDocumentStatus(documentId, newStatus);
+    if (newStatus == AppConstants.documentRejectedNeedsResend) {
+      await fs.createNotification(
+        userId: clientId,
+        title: 'Documento requiere reenvio',
+        message: 'Tu documento "$fileName" fue rechazado. Sube uno nuevo.',
+        caseId: caseId,
+        documentId: documentId,
+        type: 'document_rejected',
       );
     }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Documento actualizado: $newStatus')),
+    );
   }
 
   @override
@@ -171,8 +204,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                       const SizedBox(height: 16),
                     ],
                     // Status update
-                    Text('Estado del caso',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Row(
+                      children: [
+                        Text('Estado del caso',
+                            style: Theme.of(context).textTheme.titleLarge),
+                        if (_updatingStatus) ...[
+                          const SizedBox(width: 10),
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(4),
@@ -191,10 +236,110 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                             .map((s) =>
                                 DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
-                        onChanged: (v) {
-                          if (v != null) _updateStatus(v);
-                        },
+                        onChanged: _updatingStatus
+                            ? null
+                            : (v) {
+                                if (v != null) _updateStatus(v);
+                              },
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Documentos del caso',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 10),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: ref
+                          .read(firestoreServiceProvider)
+                          .streamCaseDocuments(p.id),
+                      builder: (context, snapshot) {
+                        final docs = snapshot.data?.docs ?? [];
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        if (docs.isEmpty) {
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Text(
+                              'Este caso no tiene documentos cargados.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          );
+                        }
+                        return Column(
+                          children: docs.map((d) {
+                            final data = d.data() as Map<String, dynamic>;
+                            final status = (data['status'] as String?) ??
+                                AppConstants.documentPendingReview;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (data['fileName'] as String?) ?? 'Documento',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    (data['documentType'] as String?) ??
+                                        'Soporte general',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  DropdownButtonFormField<String>(
+                                    value: AppConstants.documentStates.contains(status)
+                                        ? status
+                                        : AppConstants.documentPendingReview,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: AppConstants.documentStates
+                                        .map((s) => DropdownMenuItem(
+                                              value: s,
+                                              child: Text(s),
+                                            ))
+                                        .toList(),
+                                    onChanged: (v) {
+                                      if (v != null) {
+                                        _updateDocumentStatus(
+                                          documentId: d.id,
+                                          clientId: p.clientId,
+                                          caseId: p.id,
+                                          fileName:
+                                              (data['fileName'] as String?) ??
+                                                  'Documento',
+                                          newStatus: v,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                     // Actions

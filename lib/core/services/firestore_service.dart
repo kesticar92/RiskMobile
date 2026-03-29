@@ -84,6 +84,7 @@ class FirestoreService {
     required String storagePath,
     required String downloadUrl,
     required String mimeType,
+    required String documentType,
   }) async {
     await _db.collection(AppConstants.colDocuments).add({
       'userId': userId,
@@ -92,8 +93,58 @@ class FirestoreService {
       'storagePath': storagePath,
       'downloadUrl': downloadUrl,
       'mimeType': mimeType,
-      'status': 'Pendiente de revision',
+      'documentType': documentType,
+      'status': AppConstants.documentPendingReview,
       'createdAt': Timestamp.now(),
+    });
+  }
+
+  Stream<QuerySnapshot> streamCaseDocuments(String caseId) {
+    return _db
+        .collection(AppConstants.colDocuments)
+        .where('caseId', isEqualTo: caseId)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> updateDocumentStatus(String documentId, String newStatus) async {
+    await _db.collection(AppConstants.colDocuments).doc(documentId).update({
+      'status': newStatus,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
+  Future<void> createNotification({
+    required String userId,
+    required String title,
+    required String message,
+    String? caseId,
+    String? documentId,
+    String? type,
+  }) async {
+    await _db.collection(AppConstants.colNotifications).add({
+      'userId': userId,
+      'title': title,
+      'message': message,
+      'caseId': caseId,
+      'documentId': documentId,
+      'type': type ?? 'info',
+      'read': false,
+      'createdAt': Timestamp.now(),
+    });
+  }
+
+  Future<void> saveSimulationResult({
+    required String caseId,
+    required double desiredAmount,
+    required String desiredCreditType,
+    required double estimatedViableAmount,
+  }) async {
+    await _db.collection(AppConstants.colCases).doc(caseId).update({
+      'desiredAmount': desiredAmount,
+      'desiredCreditType': desiredCreditType,
+      'estimatedViableAmount': estimatedViableAmount,
+      'updatedAt': Timestamp.now(),
     });
   }
 
@@ -165,5 +216,16 @@ class FirestoreService {
         .collection(AppConstants.colUsers)
         .snapshots()
         .map((s) => s.docs.map(UserModel.fromFirestore).toList());
+  }
+
+  /// Primer usuario con rol asesor (para que el cliente abra el mismo chatId que el asesor real).
+  Future<UserModel?> getFirstAdvisorUser() async {
+    final q = await _db
+        .collection(AppConstants.colUsers)
+        .where('role', isEqualTo: AppConstants.roleAdvisor)
+        .limit(1)
+        .get();
+    if (q.docs.isEmpty) return null;
+    return UserModel.fromFirestore(q.docs.first);
   }
 }
