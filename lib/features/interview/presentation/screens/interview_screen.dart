@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -288,9 +289,14 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
         return _obligations.every((o) =>
             o.entity.trim().length >= 2 &&
             o.creditType.trim().isNotEmpty &&
-            o.monthlyPayment > 0);
+            o.monthlyPayment > 0 &&
+            (o.bankExtractFileName != null &&
+                o.bankExtractFileName!.trim().isNotEmpty));
       case 2:
-        return desiredAmount >= 0 && _selectedCreditType != null;
+        if (_selectedCreditType == null) return false;
+        if (desiredAmount < 0) return false;
+        if (desiredAmount > 0 && desiredAmount < 1000) return false;
+        return true;
       default:
         return false;
     }
@@ -486,6 +492,22 @@ class _ObligationsPageState extends State<_ObligationsPage> {
     _localList.addAll(widget.obligations);
   }
 
+  @override
+  void didUpdateWidget(covariant _ObligationsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.hasObligations) {
+      if (_localList.isNotEmpty) {
+        _localList.clear();
+      }
+      return;
+    }
+    if (widget.obligations.length != _localList.length) {
+      _localList
+        ..clear()
+        ..addAll(widget.obligations);
+    }
+  }
+
   void _addObligation() {
     showModalBottomSheet(
       context: context,
@@ -494,7 +516,7 @@ class _ObligationsPageState extends State<_ObligationsPage> {
       builder: (_) => _AddObligationSheet(
         onAdd: (ob) {
           setState(() => _localList.add(ob));
-          widget.onObligationsChanged(_localList);
+          widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
         },
       ),
     );
@@ -560,7 +582,11 @@ class _ObligationsPageState extends State<_ObligationsPage> {
                     obligation: e.value,
                     onRemove: () {
                       setState(() => _localList.removeAt(e.key));
-                      widget.onObligationsChanged(_localList);
+                      widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
+                    },
+                    onUpdate: (updated) {
+                      setState(() => _localList[e.key] = updated);
+                      widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
                     },
                   )),
             const SizedBox(height: 12),
@@ -585,11 +611,34 @@ class _ObligationsPageState extends State<_ObligationsPage> {
 class _ObligationTile extends StatelessWidget {
   final FinancialObligation obligation;
   final VoidCallback onRemove;
+  final ValueChanged<FinancialObligation> onUpdate;
 
-  const _ObligationTile({required this.obligation, required this.onRemove});
+  const _ObligationTile({
+    required this.obligation,
+    required this.onRemove,
+    required this.onUpdate,
+  });
+
+  Future<void> _pickExtract(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    final name = result.files.single.name;
+    if (name.isEmpty) return;
+    onUpdate(FinancialObligation(
+      entity: obligation.entity,
+      creditType: obligation.creditType,
+      monthlyPayment: obligation.monthlyPayment,
+      balance: obligation.balance,
+      bankExtractFileName: name,
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
+    final extract = obligation.bankExtractFileName;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -598,32 +647,71 @@ class _ObligationTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.purpleTranslucent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.credit_card_outlined,
-                color: AppColors.secondaryPurple, size: 18),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.purpleTranslucent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.credit_card_outlined,
+                    color: AppColors.secondaryPurple, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(obligation.entity,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(
+                      '${obligation.creditType} • \$${obligation.monthlyPayment.toStringAsFixed(0)}/mes',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close,
+                    size: 18, color: AppColors.textLight),
+                onPressed: onRemove,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(obligation.entity,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                Text('${obligation.creditType} • \$${obligation.monthlyPayment.toStringAsFixed(0)}/mes',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18, color: AppColors.textLight),
-            onPressed: onRemove,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                extract != null
+                    ? Icons.attach_file
+                    : Icons.warning_amber_rounded,
+                size: 16,
+                color: extract != null ? AppColors.riskLow : AppColors.riskMedium,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  extract != null
+                      ? 'Extracto: $extract'
+                      : 'Adjunta extracto bancario (PDF o imagen)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _pickExtract(context),
+                icon: const Icon(Icons.upload_file_outlined, size: 16),
+                label: Text(extract == null ? 'Adjuntar' : 'Cambiar'),
+              ),
+            ],
           ),
         ],
       ),
@@ -791,6 +879,15 @@ class _IntentionPage extends StatelessWidget {
                     prefixText: '\$ ',
                     prefixIcon: Icon(Icons.monetization_on_outlined),
                     labelText: 'Valor del crédito que buscas',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Puedes dejar 0 si aún no lo tienes claro. Si indicas un monto, usa al menos \$1.000 COP.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.35,
                   ),
                 ),
               ],

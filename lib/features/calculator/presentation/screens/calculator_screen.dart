@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/router/navigation_helpers.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/financial_profile_model.dart';
@@ -169,6 +172,38 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
             child: DebtGaugeWidget(debtPercentage: debtPct),
           ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.2),
           const SizedBox(height: 16),
+          GlassCard(
+            color: AppColors.blueTranslucent,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.functions_outlined,
+                        color: AppColors.primaryBlueDark, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Cálculo de capacidad (40% ingresos)',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '(${AppFormatters.currency(p.monthlyIncome)} × '
+                  '${(AppConstants.debtCapacityLimit * 100).toStringAsFixed(0)}%) − '
+                  '${AppFormatters.currency(p.totalMonthlyPayments)} = '
+                  '${AppFormatters.currency(p.availableCapacity)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.primaryBlueDark,
+                  ),
+                ),
+              ],
+            ),
+          ).animate().fadeIn(delay: 125.ms).slideY(begin: 0.15),
+          const SizedBox(height: 16),
           // Financial summary
           Row(
             children: [
@@ -235,8 +270,11 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  if (p.desiredAmount > 0)
+                  if (p.desiredAmount > 0) ...[
+                    _buildDesiredVsViableBars(context, p),
+                    const SizedBox(height: 12),
                     _buildGapRow(p),
+                  ],
                   const Divider(height: 20),
                   Text(
                     'Con tu capacidad mensual disponible de ${AppFormatters.currency(p.availableCapacity)}, '
@@ -289,6 +327,54 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
     );
   }
 
+  /// RF22: barras comparativas monto deseado vs monto viable de referencia.
+  Widget _buildDesiredVsViableBars(
+      BuildContext context, FinancialProfileModel p) {
+    final viableRef = (p.estimatedViableAmount != null &&
+            p.estimatedViableAmount! > 0)
+        ? p.estimatedViableAmount!
+        : p.availableCapacity * 36;
+    final maxVal = math.max(math.max(p.desiredAmount, viableRef), 1.0);
+    final desiredRatio = (p.desiredAmount / maxVal).clamp(0.0, 1.0);
+    final viableRatio = (viableRef / maxVal).clamp(0.0, 1.0);
+    final isViable = p.desiredAmount <= viableRef * 1.02;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Deseado vs viable estimado',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (p.estimatedViableAmount == null || p.estimatedViableAmount! <= 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'El monto viable es una referencia a partir de tu capacidad hasta que completes el simulador.',
+              style: TextStyle(fontSize: 11, color: AppColors.textLight),
+            ),
+          ),
+        _BarRow(
+          label: 'Monto deseado',
+          value: AppFormatters.currency(p.desiredAmount),
+          ratio: desiredRatio,
+          color: AppColors.secondaryPurple,
+        ),
+        const SizedBox(height: 8),
+        _BarRow(
+          label: 'Monto viable (referencia)',
+          value: AppFormatters.currency(viableRef),
+          ratio: viableRatio,
+          color: isViable ? AppColors.riskLow : AppColors.riskMedium,
+        ),
+      ],
+    );
+  }
+
   Widget _buildGapRow(FinancialProfileModel p) {
     final gap = p.desiredAmount - p.availableCapacity;
     final feasible = p.availableCapacity >= (p.desiredAmount * 0.01);
@@ -328,6 +414,49 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BarRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final double ratio;
+  final Color color;
+
+  const _BarRow({
+    required this.label,
+    required this.value,
+    required this.ratio,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: ratio,
+            minHeight: 8,
+            backgroundColor: color.withOpacity(0.12),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
       ],

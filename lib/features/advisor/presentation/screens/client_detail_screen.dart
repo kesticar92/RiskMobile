@@ -141,11 +141,45 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                       ),
                     ).animate().fadeIn(duration: 400.ms),
                     const SizedBox(height: 16),
+                    GlassCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.assignment_outlined,
+                                  color: AppColors.primaryBlue, size: 22),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Datos de la entrevista',
+                                style:
+                                    Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _InfoRow(
+                              'Actividad económica', p.economicActivity),
+                          if (p.contractType != null &&
+                              p.contractType!.isNotEmpty)
+                            _InfoRow('Tipo de contrato', p.contractType!),
+                          _InfoRow('Antigüedad laboral',
+                              '${p.seniorityMonths} meses'),
+                          if (p.desiredCreditType != null)
+                            _InfoRow(
+                              'Producto de interés', p.desiredCreditType!),
+                          _InfoRow(
+                            'Obligaciones declaradas',
+                            '${p.obligations.length}',
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 80.ms),
+                    const SizedBox(height: 16),
                     // Financial summary
                     Text('Perfil financiero',
                         style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 12),
-                    _InfoRow('Actividad económica', p.economicActivity),
                     _InfoRow('Ingresos mensuales',
                         AppFormatters.currency(p.monthlyIncome)),
                     _InfoRow('Total cuotas actuales',
@@ -155,8 +189,6 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         isHighlight: true),
                     _InfoRow('Monto deseado',
                         AppFormatters.currency(p.desiredAmount)),
-                    if (p.desiredCreditType != null)
-                      _InfoRow('Tipo de crédito', p.desiredCreditType!),
                     const SizedBox(height: 16),
                     // Obligations
                     if (p.obligations.isNotEmpty) ...[
@@ -188,6 +220,18 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                                           style: TextStyle(
                                               fontSize: 12,
                                               color: AppColors.textSecondary)),
+                                      if (o.bankExtractFileName != null &&
+                                          o.bankExtractFileName!.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            'Extracto: ${o.bankExtractFileName}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.primaryBlueDark,
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

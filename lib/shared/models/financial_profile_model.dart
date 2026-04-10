@@ -8,11 +8,15 @@ class FinancialObligation {
   final double monthlyPayment;
   final double? balance;
 
+  /// RF12: nombre del extracto bancario adjunto como soporte de la obligación.
+  final String? bankExtractFileName;
+
   const FinancialObligation({
     required this.entity,
     required this.creditType,
     required this.monthlyPayment,
     this.balance,
+    this.bankExtractFileName,
   });
 
   Map<String, dynamic> toMap() => {
@@ -20,6 +24,7 @@ class FinancialObligation {
     'creditType': creditType,
     'monthlyPayment': monthlyPayment,
     'balance': balance,
+    'bankExtractFileName': bankExtractFileName,
   };
 
   factory FinancialObligation.fromMap(Map<String, dynamic> map) => FinancialObligation(
@@ -27,6 +32,7 @@ class FinancialObligation {
     creditType: map['creditType'] ?? '',
     monthlyPayment: (map['monthlyPayment'] ?? 0).toDouble(),
     balance: map['balance']?.toDouble(),
+    bankExtractFileName: map['bankExtractFileName'] as String?,
   );
 }
 
