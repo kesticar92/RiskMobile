@@ -89,6 +89,58 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  Future<void> _openTemplates() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            itemCount: AppConstants.advisorChatTemplates.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final tpl = AppConstants.advisorChatTemplates[i];
+              return ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                title: Text(
+                  tpl,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                onTap: () => Navigator.of(ctx).pop(tpl),
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+    final current = _msgCtrl.text.trim();
+    final nextText = current.isEmpty ? selected : '$current\n$selected';
+    if (nextText.length > AppConstants.chatMessageMaxLength) {
+      _showTemplateLengthWarning();
+      return;
+    }
+    _msgCtrl.text = nextText;
+    _msgCtrl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _msgCtrl.text.length),
+    );
+  }
+
+  void _showTemplateLengthWarning() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'La plantilla supera el límite de ${AppConstants.chatMessageMaxLength} caracteres.',
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _msgCtrl.removeListener(_onMessageChanged);
@@ -252,6 +304,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 children: [
                   Row(
                     children: [
+                      GestureDetector(
+                        onTap: _openTemplates,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceCard,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome_outlined,
+                            size: 20,
+                            color: AppColors.primaryBlueDark,
+                          ),
+                        ),
+                      ),
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16),

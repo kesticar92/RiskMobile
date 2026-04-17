@@ -24,21 +24,34 @@ class StorageService {
 
   /// Sube archivo local y guarda metadatos en Firestore.
   Future<void> uploadCaseDocument({
-    required String localPath,
+    String? localPath,
+    Uint8List? fileBytes,
     required String originalFileName,
     required String userId,
     required String caseFolder,
     required String documentType,
     void Function(double progress)? onProgress,
   }) async {
-    if (kIsWeb) {
-      throw UnsupportedError('Subida desde web: usar uploadBytes en una version futura.');
+    if ((localPath == null || localPath.isEmpty) &&
+        (fileBytes == null || fileBytes.isEmpty)) {
+      throw StateError('No se recibio archivo para subir.');
     }
-    final file = File(localPath);
-    if (!file.existsSync()) {
-      throw StateError('Archivo no encontrado o path invalido.');
+
+    final int len;
+    File? file;
+    if (fileBytes != null && fileBytes.isNotEmpty) {
+      len = fileBytes.lengthInBytes;
+    } else {
+      if (kIsWeb) {
+        throw StateError('En web se requieren bytes del archivo.');
+      }
+      file = File(localPath!);
+      if (!file.existsSync()) {
+        throw StateError('Archivo no encontrado o path invalido.');
+      }
+      len = await file.length();
     }
-    final len = await file.length();
+
     if (len > maxFileBytes) {
       throw StateError('El archivo supera el maximo permitido (15 MB).');
     }
@@ -48,13 +61,13 @@ class StorageService {
     final ref = _storage.ref().child(AppConstants.storageDocuments).child(userId).child(caseFolder).child(objectName);
 
     final mime = _mimeFromName(originalFileName);
-    final task = ref.putFile(
-      file,
-      SettableMetadata(
-        contentType: mime,
-        customMetadata: {'originalName': originalFileName, 'caseId': caseFolder},
-      ),
+    final metadata = SettableMetadata(
+      contentType: mime,
+      customMetadata: {'originalName': originalFileName, 'caseId': caseFolder},
     );
+    final task = (fileBytes != null && fileBytes.isNotEmpty)
+        ? ref.putData(fileBytes, metadata)
+        : ref.putFile(file!, metadata);
 
     final sub = task.snapshotEvents.listen((snap) {
       if (snap.totalBytes > 0) {

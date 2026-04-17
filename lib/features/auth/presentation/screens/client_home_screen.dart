@@ -112,17 +112,63 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
                           ),
                           Row(
                             children: [
-                              IconButton(
-                                onPressed: () => context.push(AppRoutes.settings),
-                                icon: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: AppColors.border),
-                                  ),
-                                  child: const Icon(Icons.settings_outlined, size: 20),
-                                ),
+                              StreamBuilder<int>(
+                                stream: _user == null
+                                    ? null
+                                    : ref
+                                        .read(firestoreServiceProvider)
+                                        .streamUnreadNotificationCount(_user!.id),
+                                builder: (context, snapshot) {
+                                  final unread = snapshot.data ?? 0;
+                                  return Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      IconButton(
+                                        onPressed: () =>
+                                            context.push(AppRoutes.settings),
+                                        icon: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                              color: AppColors.border,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.settings_outlined,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                      if (unread > 0)
+                                        Positioned(
+                                          right: 6,
+                                          top: 6,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.riskHigh,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              unread > 99 ? '99+' : '$unread',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
                               ),
                             ],
                           ),

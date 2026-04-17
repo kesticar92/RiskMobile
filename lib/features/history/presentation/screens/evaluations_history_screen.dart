@@ -70,6 +70,20 @@ class EvaluationsHistoryScreen extends ConsumerWidget {
                           _tag('Actividad: ${p.economicActivity}'),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showDocumentsByCase(
+                            context: context,
+                            ref: ref,
+                            userId: uid,
+                            caseId: p.id,
+                          ),
+                          icon: const Icon(Icons.folder_open_outlined, size: 18),
+                          label: const Text('Ver documentos del caso'),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -89,4 +103,72 @@ class EvaluationsHistoryScreen extends ConsumerWidget {
         ),
         child: Text(text, style: const TextStyle(fontSize: 12)),
       );
+
+  void _showDocumentsByCase({
+    required BuildContext context,
+    required WidgetRef ref,
+    required String userId,
+    required String caseId,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.65,
+          minChildSize: 0.45,
+          maxChildSize: 0.9,
+          builder: (ctx, controller) {
+            return StreamBuilder(
+              stream: ref
+                  .read(firestoreServiceProvider)
+                  .streamUserCaseDocuments(userId: userId, caseId: caseId),
+              builder: (ctx, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text('No hay documentos cargados para este caso.'),
+                  );
+                }
+                return ListView.separated(
+                  controller: controller,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const Divider(height: 12),
+                  itemBuilder: (_, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final fileName = (data['fileName'] ?? 'Documento') as String;
+                    final docType =
+                        (data['documentType'] ?? 'Sin tipo') as String;
+                    final status = (data['status'] ?? 'Sin estado') as String;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        (data['mimeType'] as String?)?.contains('pdf') == true
+                            ? Icons.picture_as_pdf
+                            : Icons.image_outlined,
+                      ),
+                      title: Text(
+                        fileName,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text('$docType • $status'),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
 }

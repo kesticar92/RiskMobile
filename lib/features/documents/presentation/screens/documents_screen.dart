@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +29,9 @@ class DocumentsScreen extends ConsumerStatefulWidget {
 
 class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   static const _allowedExt = {'pdf', 'jpg', 'jpeg', 'png'};
+  static const int _minImageBytes = 20 * 1024; // 20 KB
+  static const int _minImageWidth = 600;
+  static const int _minImageHeight = 600;
   static const _uuid = Uuid();
   static const _documentTypes = [
     'Extracto bancario',
@@ -47,6 +54,9 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   int _currentUploadIndex = 0;
   int _currentUploadTotal = 0;
   DateTime? _uploadStartedAt;
+
+  bool get _hasRetryableErrors =>
+      _documents.any((d) => d.status == _DocUploadStatus.error);
 
   @override
   void initState() {
@@ -110,17 +120,32 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     );
     if (img == null || !mounted) return;
     final path = img.path;
-    if (!_isAllowedPath(path)) {
+    final name = img.name.isNotEmpty
+        ? img.name
+        : 'Foto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    if (!_isAllowedPath(path) && !_isAllowedPath(name)) {
       _showErr('Formato no permitido.');
       return;
     }
-    setState(() => _documents.add(_DocItem(
-          id: _uuid.v4(),
-          name: 'Foto_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          type: 'image',
-          path: path,
-          documentType: _selectedDocumentType,
-        )));
+    Uint8List? bytes;
+    if (img.path.isEmpty) {
+      bytes = await img.readAsBytes();
+    }
+    final item = _DocItem(
+      id: _uuid.v4(),
+      name: name,
+      type: _typeFromName(name),
+      path: path,
+      bytes: bytes,
+      documentType: _selectedDocumentType,
+    );
+    final validation = await _validateItemQuality(item);
+    if (!validation.ok) {
+      _showErr(validation.message ?? 'Archivo inválido.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _documents.add(item));
   }
 
   Future<void> _pickFromGallery() async {
@@ -135,40 +160,145 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _showErr('Solo JPG o PNG desde galeria.');
       return;
     }
-    setState(() => _documents.add(_DocItem(
-          id: _uuid.v4(),
-          name: name.isNotEmpty ? name : 'imagen.jpg',
-          type: _typeFromName(name.isNotEmpty ? name : path),
-          path: path,
-          documentType: _selectedDocumentType,
-        )));
+    Uint8List? bytes;
+    if (img.path.isEmpty) {
+      bytes = await img.readAsBytes();
+    }
+    final item = _DocItem(
+      id: _uuid.v4(),
+      name: name.isNotEmpty ? name : 'imagen.jpg',
+      type: _typeFromName(name.isNotEmpty ? name : path),
+      path: path,
+      bytes: bytes,
+      documentType: _selectedDocumentType,
+    );
+    final validation = await _validateItemQuality(item);
+    if (!validation.ok) {
+      _showErr(validation.message ?? 'Archivo inválido.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _documents.add(item));
   }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
+      withData: true,
     );
-    if (result == null || result.files.single.path == null || !mounted) return;
+    if (result == null || !mounted) return;
     final f = result.files.single;
-    final path = f.path!;
+    final path = f.path ?? '';
     if (!_isAllowedPath(f.name)) {
       _showErr('Formato no permitido (PDF, JPG, PNG, JPEG).');
       return;
     }
-    setState(() => _documents.add(_DocItem(
-          id: _uuid.v4(),
-          name: f.name,
-          type: _typeFromName(f.name),
-          path: path,
-          documentType: _selectedDocumentType,
-        )));
+    if ((f.path == null || f.path!.isEmpty) && (f.bytes == null || f.bytes!.isEmpty)) {
+      _showErr('No se pudo leer el archivo seleccionado.');
+      return;
+    }
+    final item = _DocItem(
+      id: _uuid.v4(),
+      name: f.name,
+      type: _typeFromName(f.name),
+      path: path,
+      bytes: f.bytes,
+      documentType: _selectedDocumentType,
+    );
+    final validation = await _validateItemQuality(item);
+    if (!validation.ok) {
+      _showErr(validation.message ?? 'Archivo inválido.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _documents.add(item));
   }
 
   void _showErr(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
+  }
+
+  Future<_DocValidationResult> _validateItemQuality(_DocItem item) async {
+    final size = await _getItemSize(item);
+    if (size == null || size <= 0) {
+      return const _DocValidationResult(
+        ok: false,
+        message: 'No se pudo leer el tamaño del archivo.',
+      );
+    }
+    if (size > StorageService.maxFileBytes) {
+      return const _DocValidationResult(
+        ok: false,
+        message: 'El archivo supera 15 MB.',
+      );
+    }
+    if (item.type == 'image') {
+      if (size < _minImageBytes) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'La imagen es muy liviana; intenta una foto más nítida.',
+        );
+      }
+      final imageBytes = await _readItemBytes(item);
+      if (imageBytes == null || imageBytes.isEmpty) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'No se pudo validar la imagen seleccionada.',
+        );
+      }
+      final dimensions = await _decodeImageDimensions(imageBytes);
+      if (dimensions == null) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'No se pudo procesar la imagen.',
+        );
+      }
+      if (dimensions.$1 < _minImageWidth || dimensions.$2 < _minImageHeight) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'La imagen es muy pequeña (mínimo 600x600).',
+        );
+      }
+    }
+    return const _DocValidationResult(ok: true);
+  }
+
+  Future<int?> _getItemSize(_DocItem item) async {
+    if (item.bytes != null && item.bytes!.isNotEmpty) {
+      return item.bytes!.lengthInBytes;
+    }
+    if (item.path.isEmpty) return null;
+    try {
+      if (kIsWeb) return null;
+      final file = File(item.path);
+      if (!file.existsSync()) return null;
+      return await file.length();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _readItemBytes(_DocItem item) async {
+    if (item.bytes != null && item.bytes!.isNotEmpty) return item.bytes;
+    if (item.path.isEmpty) return null;
+    try {
+      return await XFile(item.path).readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<(int, int)?> _decodeImageDimensions(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      return (frame.image.width, frame.image.height);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _saveDocuments() async {
@@ -199,40 +329,85 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     });
 
     final storage = ref.read(storageServiceProvider);
-    final total = _documents.length;
 
+    var uploadedCount = 0;
+    final candidates = _documents
+        .where(
+          (d) =>
+              d.status == _DocUploadStatus.pending ||
+              d.status == _DocUploadStatus.error,
+        )
+        .toList();
+    final uploadCount = candidates.length;
+    if (uploadCount == 0) {
+      if (mounted) _showErr('No hay documentos pendientes o fallidos para subir.');
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+        });
+      }
+      return;
+    }
     try {
       for (var i = 0; i < _documents.length; i++) {
         final doc = _documents[i];
+        if (doc.status != _DocUploadStatus.pending &&
+            doc.status != _DocUploadStatus.error) {
+          continue;
+        }
         if (mounted) {
           setState(() {
-            _currentUploadIndex = i + 1;
+            _currentUploadIndex = uploadedCount + 1;
+            doc.status = _DocUploadStatus.uploading;
+            doc.errorMessage = null;
           });
         }
-        await storage.uploadCaseDocument(
-          localPath: doc.path,
-          originalFileName: doc.name,
-          userId: uid,
-          caseFolder: _resolvedCaseFolder!,
-          documentType: doc.documentType,
-          onProgress: (p) {
-            if (mounted) {
-              setState(() => _uploadProgress = (i + p) / total);
-            }
-          },
-        );
-        if (mounted) setState(() => _uploadProgress = (i + 1) / total);
+        try {
+          await storage.uploadCaseDocument(
+            localPath: doc.path.isNotEmpty ? doc.path : null,
+            fileBytes: doc.bytes,
+            originalFileName: doc.name,
+            userId: uid,
+            caseFolder: _resolvedCaseFolder!,
+            documentType: doc.documentType,
+            onProgress: (p) {
+              if (mounted) {
+                setState(() =>
+                    _uploadProgress = (uploadedCount + p) / uploadCount);
+              }
+            },
+          );
+          uploadedCount++;
+          if (mounted) {
+            setState(() {
+              doc.status = _DocUploadStatus.completed;
+              _uploadProgress = uploadedCount / uploadCount;
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              doc.status = _DocUploadStatus.error;
+              doc.errorMessage = e.toString();
+            });
+          }
+        }
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Documentos subidos correctamente a la nube.'),
-        ),
-      );
-      popOrGo(context, AppRoutes.clientHome);
-    } catch (e) {
-      if (mounted) {
-        _showErr('Error al subir: ${e.toString()}');
+      final failed = _documents
+          .where((d) => d.status == _DocUploadStatus.error)
+          .length;
+      if (failed == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Documentos subidos correctamente a la nube.'),
+          ),
+        );
+        popOrGo(context, AppRoutes.clientHome);
+      } else {
+        _showErr(
+          'Se subieron $uploadedCount archivo(s). $failed fallaron, puedes reintentarlos.',
+        );
       }
     } finally {
       if (mounted) {
@@ -249,6 +424,118 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
   void _removeById(String id) {
     setState(() => _documents.removeWhere((d) => d.id == id));
+  }
+
+  Future<void> _retryOne(_DocItem doc) async {
+    if (_uploading) return;
+    final uid = ref.read(authServiceProvider).currentUser?.uid;
+    if (uid == null || _resolvedCaseFolder == null) return;
+    setState(() {
+      _uploading = true;
+      _uploadProgress = 0;
+      _currentUploadIndex = 1;
+      _currentUploadTotal = 1;
+      _uploadStartedAt = DateTime.now();
+      doc.status = _DocUploadStatus.uploading;
+      doc.errorMessage = null;
+    });
+    final storage = ref.read(storageServiceProvider);
+    try {
+      await storage.uploadCaseDocument(
+        localPath: doc.path.isNotEmpty ? doc.path : null,
+        fileBytes: doc.bytes,
+        originalFileName: doc.name,
+        userId: uid,
+        caseFolder: _resolvedCaseFolder!,
+        documentType: doc.documentType,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = p);
+        },
+      );
+      if (!mounted) return;
+      setState(() => doc.status = _DocUploadStatus.completed);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Archivo "${doc.name}" subido.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          doc.status = _DocUploadStatus.error;
+          doc.errorMessage = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _uploadProgress = 0;
+          _currentUploadIndex = 0;
+          _currentUploadTotal = 0;
+          _uploadStartedAt = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openPreview(_DocItem doc) async {
+    if (doc.type == 'image') {
+      final bytes = await _readItemBytes(doc);
+      if (bytes == null || bytes.isEmpty) {
+        _showErr('No se pudo abrir la previsualización.');
+        return;
+      }
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppBar(
+                automaticallyImplyLeading: false,
+                title: Text(doc.name, overflow: TextOverflow.ellipsis),
+                actions: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: InteractiveViewer(
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Previsualización PDF'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(doc.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            const Text(
+              'El archivo PDF está listo para subir. En esta versión se muestra metadato previo al envío.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _estimateRemaining() {
@@ -505,11 +792,48 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                                         color: AppColors.textSecondary,
                                       ),
                                     ),
+                                    if (doc.status == _DocUploadStatus.error)
+                                      Text(
+                                        'Error al subir. Reintenta.',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.riskHigh,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-                              Icon(Icons.check_circle,
-                                  color: AppColors.riskLow, size: 18),
+                              Icon(
+                                switch (doc.status) {
+                                  _DocUploadStatus.pending => Icons.schedule,
+                                  _DocUploadStatus.uploading => Icons.cloud_upload,
+                                  _DocUploadStatus.completed =>
+                                    Icons.check_circle,
+                                  _DocUploadStatus.error => Icons.error,
+                                },
+                                color: switch (doc.status) {
+                                  _DocUploadStatus.pending =>
+                                    AppColors.textSecondary,
+                                  _DocUploadStatus.uploading =>
+                                    AppColors.primaryBlue,
+                                  _DocUploadStatus.completed => AppColors.riskLow,
+                                  _DocUploadStatus.error => AppColors.riskHigh,
+                                },
+                                size: 18,
+                              ),
+                              IconButton(
+                                tooltip: 'Previsualizar',
+                                icon: const Icon(Icons.visibility_outlined,
+                                    size: 18, color: AppColors.primaryBlue),
+                                onPressed: _uploading ? null : () => _openPreview(doc),
+                              ),
+                              if (doc.status == _DocUploadStatus.error)
+                                IconButton(
+                                  tooltip: 'Reintentar',
+                                  icon: const Icon(Icons.refresh,
+                                      size: 18, color: AppColors.primaryBlue),
+                                  onPressed: _uploading ? null : () => _retryOne(doc),
+                                ),
                               IconButton(
                                 icon: const Icon(Icons.close,
                                     size: 16, color: AppColors.textLight),
@@ -530,6 +854,14 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                             : _saveDocuments,
                         icon: Icons.cloud_upload_outlined,
                       ),
+                      if (_hasRetryableErrors) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _uploading ? null : _saveDocuments,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar fallidos'),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 40),
                   ],
@@ -548,15 +880,28 @@ class _DocItem {
   final String name;
   final String type;
   final String path;
+  final Uint8List? bytes;
   final String documentType;
+  _DocUploadStatus status;
+  String? errorMessage;
 
   _DocItem({
     required this.id,
     required this.name,
     required this.type,
     required this.path,
+    this.bytes,
     required this.documentType,
-  });
+  }) : status = _DocUploadStatus.pending;
+}
+
+enum _DocUploadStatus { pending, uploading, completed, error }
+
+class _DocValidationResult {
+  final bool ok;
+  final String? message;
+
+  const _DocValidationResult({required this.ok, this.message});
 }
 
 class _UploadButton extends StatelessWidget {

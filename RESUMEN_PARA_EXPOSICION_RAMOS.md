@@ -447,3 +447,222 @@ Referencias historicas utiles:
 2. No versionar de forma accidental `build/`, `.dart_tool/` ni `tools/` (salvo acuerdo del equipo).
 3. Tras resolver conflictos entre ramas, conviene `dart analyze` y una pasada rapida del flujo entrevista → calculadora → documentos en el target de demo.
 
+---
+
+## 8) Propuesta de nuevos requerimientos (siguiente iteracion)
+
+Este bloque deja una propuesta clara de **4 requerimientos para `kevin-main`** y **4 requerimientos para `brandon-main`**, manteniendo la linea funcional ya trabajada.
+
+### 8.1) Nuevos requerimientos para `kevin-main` (asesor + experiencia operativa)
+
+### RF-K1 - Trazabilidad de cambios de estado del caso (auditoria)
+
+**Objetivo funcional**
+- Registrar quien cambio el estado del caso, cuando y desde que estado a cual.
+
+**Cambios en codigo (propuestos)**
+- `lib/core/services/firestore_service.dart`
+  - Nuevo metodo `appendCaseStatusHistory(caseId, fromStatus, toStatus, changedByUid)`.
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - Al confirmar cambio de estado, guardar entrada en subcoleccion `caseStatusHistory`.
+  - Nueva seccion "Historial de estados" ordenada por fecha desc.
+
+**Impacto en la demo**
+- El asesor puede demostrar evidencia de trazabilidad y control del ciclo del caso.
+
+---
+
+### RF-K2 - Filtros avanzados en CRM asesor (fecha, monto y estado)
+
+**Objetivo funcional**
+- Reducir tiempo de busqueda de casos con filtros combinados y persistidos en pantalla.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+  - Filtros por rango de fecha, rango de monto y estados multiples.
+  - Chips activos con opcion "Limpiar todo".
+- `lib/core/services/firestore_service.dart`
+  - Consulta optimizada para filtros principales y fallback local para combinaciones complejas.
+
+**Impacto en la demo**
+- El asesor localiza rapidamente casos especificos (ejemplo: "En proceso", > 8M, ultimos 30 dias).
+
+---
+
+### RF-K3 - Plantillas rapidas de mensaje en chat asesor/cliente
+
+**Objetivo funcional**
+- Estandarizar respuestas frecuentes (solicitud de documentos, estado de revision, observaciones).
+
+**Cambios en codigo (propuestos)**
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+  - Boton "Plantillas" con selector modal.
+  - Insercion en caja de texto editable antes de enviar.
+- `lib/core/constants/app_constants.dart`
+  - Lista inicial de plantillas y limite de longitud compatible con RF26.
+
+**Impacto en la demo**
+- El asesor responde mas rapido y con mensajes consistentes.
+
+---
+
+### RF-K4 - Notificacion interna al cliente por cambio de estado del caso
+
+**Objetivo funcional**
+- Informar al cliente automaticamente cuando su caso cambia de estado relevante.
+
+**Cambios en codigo (propuestos)**
+- `lib/core/services/firestore_service.dart`
+  - Reutilizar/expandir `createNotification` con tipo `case_status_changed`.
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - Al guardar estado, disparar notificacion con titulo + resumen.
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+  - Badge de notificaciones pendientes en menu principal.
+
+**Impacto en la demo**
+- Al cambiar estado desde asesor, el cliente ve alerta en su panel sin refrescos manuales.
+
+---
+
+### 8.2) Nuevos requerimientos para `brandon-main` (documentos + cliente)
+
+### RF-B1 - Reintento de subida de documentos fallidos
+
+**Objetivo funcional**
+- Evitar perdida de avance cuando falla red o se interrumpe la carga.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Estado por archivo: pendiente, subiendo, error, completado.
+  - Boton "Reintentar" solo en items con error.
+- `lib/core/services/storage_service.dart`
+  - Manejo de excepciones tipificadas y callback de progreso por archivo.
+
+**Impacto en la demo**
+- Si una carga falla, el usuario reintenta ese documento sin repetir toda la operacion.
+
+---
+
+### RF-B2 - Validacion de calidad basica para imagenes de soporte
+
+**Objetivo funcional**
+- Reducir rechazos por fotos borrosas o muy oscuras antes de subir.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Reglas de validacion cliente: peso minimo, dimensiones minimas y aviso preventivo.
+- `lib/core/services/storage_service.dart`
+  - Bloqueo de subida si incumple criterios criticos y mensaje claro al usuario.
+
+**Impacto en la demo**
+- El cliente recibe feedback inmediato y mejora calidad documental antes de enviar.
+
+---
+
+### RF-B3 - Previsualizacion de documentos adjuntos (PDF/imagen)
+
+**Objetivo funcional**
+- Verificar contenido del soporte antes de subirlo a Storage.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Tap en item abre previsualizacion.
+  - Imagen: visor full-screen; PDF: visor embebido o pagina inicial con metadatos.
+- `pubspec.yaml`
+  - Dependencia de visor liviano para PDF/imagen segun stack del proyecto.
+
+**Impacto en la demo**
+- El cliente confirma que adjunto el archivo correcto y reduce errores de carga.
+
+---
+
+### RF-B4 - Historial de cargas documentales por caso
+
+**Objetivo funcional**
+- Mostrar evidencia de que documentos se subieron, cuando y con que estado.
+
+**Cambios en codigo (propuestos)**
+- `lib/core/services/firestore_service.dart`
+  - `streamCaseDocuments(caseId)` extendido con orden y estado de proceso.
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+  - Acceso a detalle documental por caso.
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Seccion "Ultimas cargas" con fecha, tipo y estado.
+
+**Impacto en la demo**
+- El cliente y el asesor pueden consultar trazabilidad documental del caso de punta a punta.
+
+---
+
+## 9) Sugerencia de asignacion por sprint
+
+- **Sprint 1 (Kevin):** RF-K1 y RF-K4 (trazabilidad + notificaciones de estado).
+- **Sprint 1 (Brandon):** RF-B1 y RF-B3 (reintento + previsualizacion).
+- **Sprint 2 (Kevin):** RF-K2 y RF-K3 (filtros avanzados + plantillas).
+- **Sprint 2 (Brandon):** RF-B2 y RF-B4 (calidad de imagen + historial documental).
+
+---
+
+## 10) Ejecucion real completada hoy (16/04/2026)
+
+En esta fecha se implemento codigo funcional sobre `brandon-main` para los requerimientos propuestos en la seccion 8.
+
+### Brandon-main — RF-B1, RF-B2, RF-B3, RF-B4 (implementados)
+
+**RF-B1 - Reintento de subida**
+- `documents_screen.dart`: estado por archivo (`pending`, `uploading`, `completed`, `error`), reintento individual y reintento masivo de fallidos.
+- `storage_service.dart`: subida robusta por `path` o `bytes` segun plataforma.
+
+**RF-B2 - Validacion de calidad**
+- `documents_screen.dart`: validaciones previas de tamaño y resolucion minima para imagenes antes de subir.
+
+**RF-B3 - Previsualizacion**
+- `documents_screen.dart`: previsualizacion de imagen en dialogo; PDF con vista de metadato previa al envio.
+
+**RF-B4 - Historial documental por caso**
+- `firestore_service.dart`: stream de documentos por `userId + caseId`.
+- `evaluations_history_screen.dart`: boton "Ver documentos del caso" y listado en bottom sheet.
+
+### Kevin-main — RF-K1, RF-K4, RF-K2, RF-K3 (implementados)
+
+**RF-K1 - Trazabilidad de cambio de estado**
+- `firestore_service.dart`: `appendCaseStatusHistory(...)` y `streamCaseStatusHistory(...)`.
+- `client_detail_screen.dart`: registro de cambios y bloque visual de historial.
+
+**RF-K4 - Notificacion por cambio de estado**
+- `client_detail_screen.dart`: al cambiar estado crea notificacion `case_status_changed`.
+- `firestore_service.dart`: soporte de conteo no leido (`streamUnreadNotificationCount`).
+- `client_home_screen.dart`: badge de notificaciones pendientes.
+
+**RF-K2 - Filtros avanzados CRM**
+- `advisor_dashboard_screen.dart`: filtros por rango de monto, ultimos 7/30/90 dias, multiestado y accion "Limpiar todo".
+
+**RF-K3 - Plantillas rapidas de chat**
+- `app_constants.dart`: catalogo `advisorChatTemplates`.
+- `chat_screen.dart`: modal de plantillas e insercion en input con control de longitud.
+
+### Rutas de demo para exposicion (hoy)
+
+1. Cliente: `/documents` (subida, error, reintento, previsualizacion).
+2. Cliente: `/evaluations-history` (ver documentos por caso).
+3. Asesor: `/client-detail` (cambio de estado + historial + notificacion).
+4. Cliente: `/client-home` (badge de no leidas).
+5. Asesor: `/advisor-dashboard` (filtros avanzados).
+6. Chat: `/chat` (plantillas rapidas).
+
+### Archivos modificados hoy (16/04/2026)
+
+- `README.md`
+- `RESUMEN_PARA_EXPOSICION_RAMOS.md`
+- `lib/core/constants/app_constants.dart`
+- `lib/core/services/firestore_service.dart`
+- `lib/core/services/storage_service.dart`
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+
+**Archivos nuevos creados hoy:** no se crearon archivos nuevos en esta iteracion; se trabajaron modificaciones sobre archivos existentes.
+
