@@ -666,3 +666,12 @@ En esta fecha se implemento codigo funcional sobre `brandon-main` para los reque
 
 **Archivos nuevos creados hoy:** no se crearon archivos nuevos en esta iteracion; se trabajaron modificaciones sobre archivos existentes.
 
+### Nota de autoria en `kevin-main` (16/04/2026)
+
+Para dejar trazabilidad de autoria en historial Git de la rama `kevin-main`, este resumen registra como bloque Kevin implementado e integrado en esta iteracion:
+
+- **RF-K1:** trazabilidad de estado de caso.
+- **RF-K2:** filtros avanzados en CRM asesor.
+- **RF-K3:** plantillas rapidas en chat.
+- **RF-K4:** notificacion al cliente por cambio de estado.
+
