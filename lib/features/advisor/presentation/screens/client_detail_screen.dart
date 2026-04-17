@@ -26,6 +26,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   FinancialProfileModel? _profile;
   bool _isLoading = true;
   bool _updatingStatus = false;
+  String? _advisorName;
 
   @override
   void initState() {
@@ -34,6 +35,12 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   }
 
   Future<void> _load() async {
+    final auth = ref.read(authServiceProvider);
+    final advisorUid = auth.currentUser?.uid;
+    if (advisorUid != null && _advisorName == null) {
+      final advisor = await auth.getUserData(advisorUid);
+      _advisorName = advisor?.name;
+    }
     final p = await ref
         .read(firestoreServiceProvider)
         .getFinancialProfile(widget.profileId);
@@ -57,6 +64,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
         fromStatus: current.caseStatus,
         toStatus: status,
         changedByUid: advisorUid,
+        changedByName: _advisorName,
       );
       await fs.createNotification(
         userId: current.clientId,
@@ -340,6 +348,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                             final data = h.data() as Map<String, dynamic>;
                             final from = (data['fromStatus'] as String?) ?? 'Sin estado';
                             final to = (data['toStatus'] as String?) ?? 'Sin estado';
+                            final changedBy =
+                                (data['changedByName'] as String?)?.trim();
                             final changedAt = (data['changedAt'] as Timestamp?)?.toDate();
                             return Container(
                               width: double.infinity,
@@ -359,6 +369,14 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                  if (changedBy != null && changedBy.isNotEmpty)
+                                    Text(
+                                      'Por: $changedBy',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
                                   if (changedAt != null)
                                     Text(
                                       AppFormatters.date(changedAt),
