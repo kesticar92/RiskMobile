@@ -73,6 +73,26 @@ Este bloque se centra en mejorar la gestion del asesor: ver mejor los casos, act
 
 ---
 
+### Revision de documentos del caso (asesor)
+
+**Objetivo funcional**
+- Ver los soportes subidos por el cliente en el contexto del caso y actualizar su estado de revision.
+
+**Cambios en codigo**
+- `lib/core/constants/app_constants.dart`
+  - Estados: `documentPendingReview`, `documentApproved`, `documentRejectedNeedsResend` y lista `documentStates`.
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - `StreamBuilder` con `streamCaseDocuments(caseId)`.
+  - `DropdownButtonFormField` para cambiar estado; `_updateDocumentStatus` persiste con `updateDocumentStatus`.
+  - Si el documento pasa a estado de rechazo que requiere reenvio, se crea notificacion para el cliente (`createNotification`) segun la logica implementada.
+- `lib/core/services/firestore_service.dart`
+  - `streamCaseDocuments`, `updateDocumentStatus`, `createNotification`.
+
+**Impacto en la demo**
+- El asesor muestra documentos en tiempo casi real y cambia aprobado / pendiente / rechazado con trazabilidad en Firestore.
+
+---
+
 ### Ajustes de navegacion relacionados (soporte transversal)
 
 **Objetivo funcional**
@@ -118,6 +138,60 @@ Este bloque se centra en mejorar la gestion del asesor: ver mejor los casos, act
 
 **Impacto en la demo**
 - Flujo del paso 1 coherente: al elegir actividad, contrato (si aplica), meses e ingreso, **Continuar** se activa en cuanto las reglas de validacion se cumplen, sin gestos duplicados.
+
+---
+
+## 1c) Rama `kevin-main` — Entrega abril 2026: seguridad, preferencias y CRM (RF03, RF24, RF33, RF34)
+
+Esta entrega amplia el bloque asesor/transversal: desbloqueo con biometria cuando hay sesion activa, preferencias persistidas y mas contexto de entrevista en la ficha del cliente.
+
+### RF03 y RF34 — Biometria al iniciar y switch en Configuracion
+
+**Objetivo funcional**
+- Tras iniciar sesion, el usuario puede activar biometria; en siguientes aperturas de la app, si Firebase mantiene la sesion, se exige validacion con `local_auth` antes de entrar al panel.
+- El switch en Configuracion persiste en almacenamiento local y comprueba que el dispositivo permita biometria antes de activar.
+
+**Cambios en codigo**
+- `lib/core/services/user_preferences.dart` (nuevo): claves `pref_biometric_enabled`, `pref_notifications_push`, `pref_notifications_email`.
+- `lib/core/services/auth_service.dart`: `canUseBiometrics`; `authenticateWithBiometrics` usa esa comprobacion.
+- `lib/features/auth/presentation/screens/splash_screen.dart`: tras el splash, si hay usuario y biometria activada, prompt biométrico; si falla, tarjeta **Reintentar** / **Cerrar sesion**.
+- `lib/features/auth/presentation/screens/login_screen.dart`: boton de acceso biométrico alineado con preferencia y mensajes si no hay sesion o biometria desactivada.
+- `lib/features/settings/presentation/screens/settings_screen.dart`: pantalla con estado cargado desde preferencias; switches funcionales para biometria (con prueba al activar) y notificaciones.
+
+**Impacto en la demo**
+- Activar biometria en Configuracion, cerrar y reabrir la app: se pide huella/rostro antes del dashboard.
+- Desactivar biometria: entrada directa tras splash si la sesion sigue viva.
+
+---
+
+### RF33 — Preferencias de notificaciones (push y correo)
+
+**Objetivo funcional**
+- Dejar guardada la intencion del usuario sobre alertas; base para integrar FCM o correo mas adelante.
+
+**Cambios en codigo**
+- Misma pantalla de Configuracion: switches **Notificaciones push** y **Notificaciones por correo** con `SnackBar` de confirmacion.
+
+**Impacto en la demo**
+- Mostrar que las opciones se mantienen al salir y volver a Configuracion.
+
+---
+
+### RF24 — Perfil financiero del cliente: bloque "Datos de la entrevista"
+
+**Objetivo funcional**
+- Que el asesor vea en un solo lugar actividad economica, tipo de contrato, antigüedad, producto de interes y cantidad de obligaciones declaradas, ademas de las cifras del perfil.
+
+**Cambios en codigo**
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - Tarjeta **Datos de la entrevista** antes del resumen numerico.
+  - En **Perfil financiero** se priorizan ingresos, cuotas, capacidad y monto deseado (sin duplicar actividad/tipo de credito ya mostrados arriba).
+  - En cada obligacion, si existe, se muestra el nombre del **extracto bancario** adjunto en entrevista (ver RF12).
+
+**Impacto en la demo**
+- Abrir un cliente desde el CRM y narrar entrevista + numeros en orden logico.
+
+**Commit de referencia en `origin/kevin-main`:** `ab61843`.
 
 ---
 
@@ -187,6 +261,69 @@ Este bloque cubre captura/seleccion de soportes, subida a nube de forma estructu
 
 ---
 
+## 2c) Misma linea cliente — Entrega abril 2026 (RF12, RF14, RF21, RF22)
+
+Cambios en entrevista y en pantalla de perfil financiero (calculadora) alineados con el README; el codigo se integro en `kevin-main` y debe estar tambien en `brandon-main` tras merge entre ramas.
+
+### RF12 — Extracto bancario por obligacion (entrevista paso 2)
+
+**Objetivo funcional**
+- Asociar a cada obligacion declarada un soporte de extracto (PDF o imagen) mediante selector de archivos.
+
+**Cambios en codigo**
+- `lib/shared/models/financial_profile_model.dart`: campo opcional `bankExtractFileName` en `FinancialObligation` (map Firestore `bankExtractFileName`).
+- `lib/features/interview/presentation/screens/interview_screen.dart`
+  - Cada fila de obligacion: boton **Adjuntar** / **Cambiar** con `FilePicker` (`pdf`, `jpg`, `jpeg`, `png`).
+  - Validacion de paso: si hay obligaciones, cada una debe tener extracto antes de **Continuar**.
+  - `didUpdateWidget` en la pagina de obligaciones para mantener lista local al desactivar obligaciones.
+
+**Impacto en la demo**
+- Agregar dos obligaciones y adjuntar extracto a cada una; el asesor ve el nombre del archivo en detalle de cliente.
+
+---
+
+### RF14 — Formula explicita de capacidad disponible (40% ingresos)
+
+**Objetivo funcional**
+- Mostrar la regla `(Ingresos × 40%) − Total cuotas = Capacidad disponible` con valores reales del caso.
+
+**Cambios en codigo**
+- `lib/features/calculator/presentation/screens/calculator_screen.dart`
+  - `GlassCard` con texto que usa `AppConstants.debtCapacityLimit` y formateo de montos.
+
+**Impacto en la demo**
+- En perfil financiero, leer la tarjeta en voz alta enlazando con la metrica de capacidad.
+
+---
+
+### RF21 — Monto deseado (paso 3 entrevista)
+
+**Objetivo funcional**
+- Aclarar que 0 es valido; si el cliente ingresa monto, minimo razonable (`$1.000` COP) para evitar basura.
+
+**Cambios en codigo**
+- `interview_screen.dart`: texto de ayuda bajo el campo; `_canProceed` en paso 3 coherente con esa regla.
+
+**Impacto en la demo**
+- Probar 0 y un monto menor a 1000 para mostrar bloqueo del boton **Calcular mi perfil financiero**.
+
+---
+
+### RF22 — Comparacion visual deseado vs viable (perfil financiero)
+
+**Objetivo funcional**
+- Barras de progreso que comparan monto deseado con un monto viable de referencia (usa `estimatedViableAmount` del simulador si existe; si no, referencia derivada de la capacidad).
+
+**Cambios en codigo**
+- `calculator_screen.dart`: widget de barras dentro del bloque de analisis de capacidad cuando `desiredAmount > 0`.
+
+**Impacto en la demo**
+- Completar entrevista con monto deseado, abrir calculadora y mostrar barras; opcionalmente actualizar viable desde simulador y repetir.
+
+**Commit de referencia (mismo que bloque Kevin en remoto):** `ab61843` en `origin/kevin-main`; en `brandon-main` queda reflejado tras merge.
+
+---
+
 ## 3) Simulador - cupo por linea de credito (ultimo ajuste funcional)
 
 Este ajuste se hizo para que el cupo no sea un numero plano: depende del producto elegido.
@@ -250,6 +387,9 @@ Este ajuste se hizo para que el cupo no sea un numero plano: depende del product
 Si te piden "donde esta eso en codigo", muestra estos archivos en este orden:
 
 1. Pantalla (UI y flujo)
+- `lib/features/auth/presentation/screens/splash_screen.dart`
+- `lib/features/auth/presentation/screens/login_screen.dart`
+- `lib/features/settings/presentation/screens/settings_screen.dart`
 - `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
 - `lib/features/advisor/presentation/screens/client_detail_screen.dart`
 - `lib/features/chat/presentation/screens/chat_screen.dart`
@@ -263,6 +403,7 @@ Si te piden "donde esta eso en codigo", muestra estos archivos en este orden:
 2. Servicios (reglas de negocio / persistencia)
 - `lib/core/services/firestore_service.dart`
 - `lib/core/services/storage_service.dart`
+- `lib/core/services/user_preferences.dart` (preferencias locales: biometria, notificaciones)
 
 3. Constantes / soporte de arquitectura
 - `lib/core/constants/app_constants.dart`
@@ -271,25 +412,257 @@ Si te piden "donde esta eso en codigo", muestra estos archivos en este orden:
 
 4. Seguridad / despliegue
 - `storage.rules`
+- `firestore.rules` (reglas generales del proyecto en repo; desplegar con Firebase segun entorno)
 - `docs/REGLAS_DOCUMENTOS_FIRESTORE.md`
 
 ---
 
-## 5) Guion corto para explicar en clase
+## 5) Sincronizacion de ramas (estado actual Git)
 
-- En `kevin-main` cerramos el bloque asesor: mejor lectura del pipeline de casos (RF23), cambio de estado robusto (RF25) y chat validado a 500 caracteres con asesor real (RF26).
-- En `brandon-main` cerramos el bloque documental: captura por camara, carga por archivo y persistencia segura en Firebase Storage + metadatos en Firestore (RF08, RF09, RF35).
-- Como ajuste transversal, reforzamos navegacion (`popOrGo`, vuelta al menu en calculadora/simulador), simulador por linea de credito, historial de evaluaciones y la correccion del paso 1 de la entrevista (Continuar al escribir ingresos sin tener que re-seleccionar la actividad).
-- Para probar en clase desde PC: `flutter run -d chrome`, sabiendo que algunas funciones moviles pueden diferir en web.
+Tras los ultimos entregables:
+
+- **`kevin-main`**: ademas del merge historico con `brandon-main`, incluye la entrega **abril 2026** (`ab61843` en `origin/kevin-main`): RF03, RF12, RF14, RF21, RF22, RF24, RF33, RF34 (autor de commit **KEvin3162** / correo Kevin).
+- **`brandon-main`**: debe incorporar el mismo codigo aplicativo mediante **merge** desde `kevin-main` cuando el equipo sincronice ramas; este resumen (`RESUMEN_PARA_EXPOSICION_RAMOS.md`) puede actualizarse en `brandon-main` con el merge o un commit de documentacion (autor **Brandon** segun `git config` local al subir).
+
+Referencias historicas utiles:
+
+- Merge previo Kevin + Brandon: `c0961c5` (linea documental previa `d05ef89`).
+
+**Para la exposicion:** con las ramas sincronizadas, el **codigo** es el mismo; difieren **autoria y orden de commits** en el historial.
 
 ---
 
-## 6) Pendiente al retomar el proyecto (Git)
+## 6) Guion corto para explicar en clase
 
-**Recordatorio:** hacer **commit y push** en **ambas ramas** cuando vuelvas a trabajar aqui, segun corresponda a cada bloque:
+- Bloque **asesor**: pipeline de casos (RF23), estado del caso con feedback (RF25), chat limitado y asesor real (RF26), revision de documentos del caso con estados y notificacion cuando aplica; **abril 2026:** biometria y preferencias (RF03/34/33), bloque entrevista en detalle (RF24).
+- Bloque **documental / cliente**: RF08, RF09, RF35 (Storage + metadatos), simulador por linea de credito, guardado de simulacion y texto de viabilidad, historial de evaluaciones; **abril 2026:** extractos por obligacion (RF12), formula capacidad y barras deseado/viable (RF14/22), monto deseado (RF21).
+- **UX transversal:** `popOrGo`, vuelta explicita al menu en calculadora y simulador, paso 1 de entrevista sin tener que re-elegir actividad para habilitar Continuar.
+- **Demo en PC:** `flutter run -d chrome` (Firebase Web ya configurado); validar camara/biometria principalmente en movil.
 
-1. Rama **`kevin-main`**: subir cambios del bloque asesor / cliente compartidos que vayan con esa rama (verificar `git config user.name` y `user.email` local si quieres que el autor sea Kevin).
-2. Rama **`brandon-main`**: subir cambios del bloque documental / ajustes que vayan con esa rama (verificar identidad local si el autor debe ser Brandon).
+---
 
-Antes de push: `git status`, revisar que no subas `build/`, `.dart_tool/` ni `tools/` salvo que lo hayan acordado expresamente.
+## 7) Buenas practicas para siguientes cambios (Git)
+
+1. Antes de commitear: `git status`; `git config user.name` y `user.email` en el repo si alternan Kevin / Brandon.
+2. No versionar de forma accidental `build/`, `.dart_tool/` ni `tools/` (salvo acuerdo del equipo).
+3. Tras resolver conflictos entre ramas, conviene `dart analyze` y una pasada rapida del flujo entrevista → calculadora → documentos en el target de demo.
+
+---
+
+## 8) Propuesta de nuevos requerimientos (siguiente iteracion)
+
+Este bloque deja una propuesta clara de **4 requerimientos para `kevin-main`** y **4 requerimientos para `brandon-main`**, manteniendo la linea funcional ya trabajada.
+
+### 8.1) Nuevos requerimientos para `kevin-main` (asesor + experiencia operativa)
+
+### RF-K1 - Trazabilidad de cambios de estado del caso (auditoria)
+
+**Objetivo funcional**
+- Registrar quien cambio el estado del caso, cuando y desde que estado a cual.
+
+**Cambios en codigo (propuestos)**
+- `lib/core/services/firestore_service.dart`
+  - Nuevo metodo `appendCaseStatusHistory(caseId, fromStatus, toStatus, changedByUid)`.
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - Al confirmar cambio de estado, guardar entrada en subcoleccion `caseStatusHistory`.
+  - Nueva seccion "Historial de estados" ordenada por fecha desc.
+
+**Impacto en la demo**
+- El asesor puede demostrar evidencia de trazabilidad y control del ciclo del caso.
+
+---
+
+### RF-K2 - Filtros avanzados en CRM asesor (fecha, monto y estado)
+
+**Objetivo funcional**
+- Reducir tiempo de busqueda de casos con filtros combinados y persistidos en pantalla.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+  - Filtros por rango de fecha, rango de monto y estados multiples.
+  - Chips activos con opcion "Limpiar todo".
+- `lib/core/services/firestore_service.dart`
+  - Consulta optimizada para filtros principales y fallback local para combinaciones complejas.
+
+**Impacto en la demo**
+- El asesor localiza rapidamente casos especificos (ejemplo: "En proceso", > 8M, ultimos 30 dias).
+
+---
+
+### RF-K3 - Plantillas rapidas de mensaje en chat asesor/cliente
+
+**Objetivo funcional**
+- Estandarizar respuestas frecuentes (solicitud de documentos, estado de revision, observaciones).
+
+**Cambios en codigo (propuestos)**
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+  - Boton "Plantillas" con selector modal.
+  - Insercion en caja de texto editable antes de enviar.
+- `lib/core/constants/app_constants.dart`
+  - Lista inicial de plantillas y limite de longitud compatible con RF26.
+
+**Impacto en la demo**
+- El asesor responde mas rapido y con mensajes consistentes.
+
+---
+
+### RF-K4 - Notificacion interna al cliente por cambio de estado del caso
+
+**Objetivo funcional**
+- Informar al cliente automaticamente cuando su caso cambia de estado relevante.
+
+**Cambios en codigo (propuestos)**
+- `lib/core/services/firestore_service.dart`
+  - Reutilizar/expandir `createNotification` con tipo `case_status_changed`.
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - Al guardar estado, disparar notificacion con titulo + resumen.
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+  - Badge de notificaciones pendientes en menu principal.
+
+**Impacto en la demo**
+- Al cambiar estado desde asesor, el cliente ve alerta en su panel sin refrescos manuales.
+
+---
+
+### 8.2) Nuevos requerimientos para `brandon-main` (documentos + cliente)
+
+### RF-B1 - Reintento de subida de documentos fallidos
+
+**Objetivo funcional**
+- Evitar perdida de avance cuando falla red o se interrumpe la carga.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Estado por archivo: pendiente, subiendo, error, completado.
+  - Boton "Reintentar" solo en items con error.
+- `lib/core/services/storage_service.dart`
+  - Manejo de excepciones tipificadas y callback de progreso por archivo.
+
+**Impacto en la demo**
+- Si una carga falla, el usuario reintenta ese documento sin repetir toda la operacion.
+
+---
+
+### RF-B2 - Validacion de calidad basica para imagenes de soporte
+
+**Objetivo funcional**
+- Reducir rechazos por fotos borrosas o muy oscuras antes de subir.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Reglas de validacion cliente: peso minimo, dimensiones minimas y aviso preventivo.
+- `lib/core/services/storage_service.dart`
+  - Bloqueo de subida si incumple criterios criticos y mensaje claro al usuario.
+
+**Impacto en la demo**
+- El cliente recibe feedback inmediato y mejora calidad documental antes de enviar.
+
+---
+
+### RF-B3 - Previsualizacion de documentos adjuntos (PDF/imagen)
+
+**Objetivo funcional**
+- Verificar contenido del soporte antes de subirlo a Storage.
+
+**Cambios en codigo (propuestos)**
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Tap en item abre previsualizacion.
+  - Imagen: visor full-screen; PDF: visor embebido o pagina inicial con metadatos.
+- `pubspec.yaml`
+  - Dependencia de visor liviano para PDF/imagen segun stack del proyecto.
+
+**Impacto en la demo**
+- El cliente confirma que adjunto el archivo correcto y reduce errores de carga.
+
+---
+
+### RF-B4 - Historial de cargas documentales por caso
+
+**Objetivo funcional**
+- Mostrar evidencia de que documentos se subieron, cuando y con que estado.
+
+**Cambios en codigo (propuestos)**
+- `lib/core/services/firestore_service.dart`
+  - `streamCaseDocuments(caseId)` extendido con orden y estado de proceso.
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+  - Acceso a detalle documental por caso.
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Seccion "Ultimas cargas" con fecha, tipo y estado.
+
+**Impacto en la demo**
+- El cliente y el asesor pueden consultar trazabilidad documental del caso de punta a punta.
+
+---
+
+## 9) Sugerencia de asignacion por sprint
+
+- **Sprint 1 (Kevin):** RF-K1 y RF-K4 (trazabilidad + notificaciones de estado).
+- **Sprint 1 (Brandon):** RF-B1 y RF-B3 (reintento + previsualizacion).
+- **Sprint 2 (Kevin):** RF-K2 y RF-K3 (filtros avanzados + plantillas).
+- **Sprint 2 (Brandon):** RF-B2 y RF-B4 (calidad de imagen + historial documental).
+
+---
+
+## 10) Ejecucion real completada hoy (16/04/2026)
+
+En esta fecha se implemento codigo funcional sobre `brandon-main` para los requerimientos propuestos en la seccion 8.
+
+### Brandon-main — RF-B1, RF-B2, RF-B3, RF-B4 (implementados)
+
+**RF-B1 - Reintento de subida**
+- `documents_screen.dart`: estado por archivo (`pending`, `uploading`, `completed`, `error`), reintento individual y reintento masivo de fallidos.
+- `storage_service.dart`: subida robusta por `path` o `bytes` segun plataforma.
+
+**RF-B2 - Validacion de calidad**
+- `documents_screen.dart`: validaciones previas de tamaño y resolucion minima para imagenes antes de subir.
+
+**RF-B3 - Previsualizacion**
+- `documents_screen.dart`: previsualizacion de imagen en dialogo; PDF con vista de metadato previa al envio.
+
+**RF-B4 - Historial documental por caso**
+- `firestore_service.dart`: stream de documentos por `userId + caseId`.
+- `evaluations_history_screen.dart`: boton "Ver documentos del caso" y listado en bottom sheet.
+
+### Kevin-main — RF-K1, RF-K4, RF-K2, RF-K3 (implementados)
+
+**RF-K1 - Trazabilidad de cambio de estado**
+- `firestore_service.dart`: `appendCaseStatusHistory(...)` y `streamCaseStatusHistory(...)`.
+- `client_detail_screen.dart`: registro de cambios y bloque visual de historial.
+
+**RF-K4 - Notificacion por cambio de estado**
+- `client_detail_screen.dart`: al cambiar estado crea notificacion `case_status_changed`.
+- `firestore_service.dart`: soporte de conteo no leido (`streamUnreadNotificationCount`).
+- `client_home_screen.dart`: badge de notificaciones pendientes.
+
+**RF-K2 - Filtros avanzados CRM**
+- `advisor_dashboard_screen.dart`: filtros por rango de monto, ultimos 7/30/90 dias, multiestado y accion "Limpiar todo".
+
+**RF-K3 - Plantillas rapidas de chat**
+- `app_constants.dart`: catalogo `advisorChatTemplates`.
+- `chat_screen.dart`: modal de plantillas e insercion en input con control de longitud.
+
+### Rutas de demo para exposicion (hoy)
+
+1. Cliente: `/documents` (subida, error, reintento, previsualizacion).
+2. Cliente: `/evaluations-history` (ver documentos por caso).
+3. Asesor: `/client-detail` (cambio de estado + historial + notificacion).
+4. Cliente: `/client-home` (badge de no leidas).
+5. Asesor: `/advisor-dashboard` (filtros avanzados).
+6. Chat: `/chat` (plantillas rapidas).
+
+### Archivos modificados hoy (16/04/2026)
+
+- `README.md`
+- `RESUMEN_PARA_EXPOSICION_RAMOS.md`
+- `lib/core/constants/app_constants.dart`
+- `lib/core/services/firestore_service.dart`
+- `lib/core/services/storage_service.dart`
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+
+**Archivos nuevos creados hoy:** no se crearon archivos nuevos en esta iteracion; se trabajaron modificaciones sobre archivos existentes.
 

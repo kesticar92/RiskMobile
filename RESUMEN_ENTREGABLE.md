@@ -326,3 +326,49 @@ Pueden funcionar bien si siempre se abrieron con `push`; si en algún flujo se u
 ---
 
 *Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17, **sesión 4 (22-mar-2026):** RF23-RF25-RF26, navegación, simulador por línea de crédito, RF08-RF09-RF35). **Checkpoint:** sección 13 — subida Brandon pendiente.*
+
+---
+
+## 14. Avance sesión del **16 de abril de 2026** (jueves)
+
+En esta sesión se ejecutaron mejoras funcionales para documentos, CRM asesor, trazabilidad y chat; además se actualizó la documentación de exposición.
+
+### 14.1 Requerimientos implementados en código
+
+| Bloque | Implementación |
+|---|---|
+| **Brandon (RF-B1)** | Reintento de subida por archivo y reintento masivo de fallidos en documentos. |
+| **Brandon (RF-B2)** | Validación de calidad de imagen antes de subir (tamaño y resolución mínima). |
+| **Brandon (RF-B3)** | Previsualización de adjuntos (imagen + metadato PDF). |
+| **Brandon (RF-B4)** | Historial de documentos por caso desde historial de evaluaciones. |
+| **Kevin (RF-K1)** | Trazabilidad de cambios de estado de caso en subcolección histórica. |
+| **Kevin (RF-K4)** | Notificación al cliente cuando el asesor cambia estado del caso + badge de no leídas. |
+| **Kevin (RF-K2)** | Filtros avanzados en CRM: monto, fecha y multiestado. |
+| **Kevin (RF-K3)** | Plantillas rápidas de chat con inserción y control de longitud. |
+
+### 14.2 Flujo para mostrar en exposición
+
+1. Cliente abre `Mis documentos` y prueba subida/errores/reintento/previsualización.  
+2. Cliente abre `Historial de evaluaciones` y consulta documentos del caso.  
+3. Asesor abre `Detalle de cliente`, cambia estado y muestra historial de cambios.  
+4. Cliente vuelve a Home y muestra badge de notificaciones no leídas.  
+5. Asesor abre CRM y usa filtros avanzados.  
+6. En chat, asesor usa plantillas rápidas.
+
+### 14.3 Archivos modificados hoy
+
+- `README.md`
+- `RESUMEN_PARA_EXPOSICION_RAMOS.md`
+- `lib/core/constants/app_constants.dart`
+- `lib/core/services/firestore_service.dart`
+- `lib/core/services/storage_service.dart`
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+
+### 14.4 Archivos creados hoy
+
+- No se crearon archivos nuevos en esta sesión; se modificaron archivos existentes.

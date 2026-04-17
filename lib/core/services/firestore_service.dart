@@ -64,6 +64,35 @@ class FirestoreService {
     });
   }
 
+  Future<void> appendCaseStatusHistory({
+    required String caseId,
+    required String fromStatus,
+    required String toStatus,
+    required String changedByUid,
+    String? changedByName,
+  }) async {
+    await _db
+        .collection(AppConstants.colCases)
+        .doc(caseId)
+        .collection('caseStatusHistory')
+        .add({
+      'fromStatus': fromStatus,
+      'toStatus': toStatus,
+      'changedByUid': changedByUid,
+      'changedByName': changedByName,
+      'changedAt': Timestamp.now(),
+    });
+  }
+
+  Stream<QuerySnapshot> streamCaseStatusHistory(String caseId) {
+    return _db
+        .collection(AppConstants.colCases)
+        .doc(caseId)
+        .collection('caseStatusHistory')
+        .orderBy('changedAt', descending: true)
+        .snapshots();
+  }
+
   /// Ultimo caso del cliente (para adjuntar documentos a ese caso). RF35.
   Future<String?> getLatestCaseIdForClient(String clientId) async {
     final q = await _db
@@ -107,6 +136,18 @@ class FirestoreService {
         .snapshots();
   }
 
+  Stream<QuerySnapshot> streamUserCaseDocuments({
+    required String userId,
+    required String caseId,
+  }) {
+    return _db
+        .collection(AppConstants.colDocuments)
+        .where('userId', isEqualTo: userId)
+        .where('caseId', isEqualTo: caseId)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
   Future<void> updateDocumentStatus(String documentId, String newStatus) async {
     await _db.collection(AppConstants.colDocuments).doc(documentId).update({
       'status': newStatus,
@@ -132,6 +173,15 @@ class FirestoreService {
       'read': false,
       'createdAt': Timestamp.now(),
     });
+  }
+
+  Stream<int> streamUnreadNotificationCount(String userId) {
+    return _db
+        .collection(AppConstants.colNotifications)
+        .where('userId', isEqualTo: userId)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
   }
 
   Future<void> saveSimulationResult({

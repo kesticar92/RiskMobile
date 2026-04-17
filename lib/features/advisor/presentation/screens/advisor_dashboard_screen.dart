@@ -163,19 +163,40 @@ class _ClientsTab extends ConsumerStatefulWidget {
 
 class _ClientsTabState extends ConsumerState<_ClientsTab> {
   final _searchCtrl = TextEditingController();
+  final _minAmountCtrl = TextEditingController();
+  final _maxAmountCtrl = TextEditingController();
   String _search = '';
+  final Set<String> _selectedStatuses = {};
+  int? _lastDays;
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _minAmountCtrl.dispose();
+    _maxAmountCtrl.dispose();
     super.dispose();
   }
+
+  double? _parseAmount(String raw) {
+    final sanitized = raw.replaceAll('.', '').replaceAll(',', '.').trim();
+    if (sanitized.isEmpty) return null;
+    return double.tryParse(sanitized);
+  }
+
+  bool get _hasAdvancedFilters =>
+      _selectedStatuses.isNotEmpty ||
+      _lastDays != null ||
+      _minAmountCtrl.text.trim().isNotEmpty ||
+      _maxAmountCtrl.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<FinancialProfileModel>>(
       stream: ref.read(firestoreServiceProvider).streamAllProfiles(),
       builder: (context, snapshot) {
+        final minAmount = _parseAmount(_minAmountCtrl.text);
+        final maxAmount = _parseAmount(_maxAmountCtrl.text);
+        final now = DateTime.now();
         final allProfiles = snapshot.data ?? [];
         final approvedCount = allProfiles
             .where((p) => p.caseStatus == AppConstants.caseCreditApproved)
@@ -189,11 +210,23 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
         final inProgressPct =
             total > 0 ? ((inProgressCount / total) * 100).round() : 0;
         final filtered = allProfiles.where((p) {
-          final matchStatus = widget.filterStatus == 'Todos' ||
-              p.caseStatus == widget.filterStatus;
+          final matchStatus = (widget.filterStatus == 'Todos' ||
+                  p.caseStatus == widget.filterStatus) &&
+              (_selectedStatuses.isEmpty ||
+                  _selectedStatuses.contains(p.caseStatus));
           final matchSearch = _search.isEmpty ||
               p.clientName.toLowerCase().contains(_search.toLowerCase());
-          return matchStatus && matchSearch;
+          final matchMinAmount =
+              minAmount == null || p.desiredAmount >= minAmount;
+          final matchMaxAmount =
+              maxAmount == null || p.desiredAmount <= maxAmount;
+          final matchDate = _lastDays == null ||
+              now.difference(p.updatedAt).inDays <= _lastDays!;
+          return matchStatus &&
+              matchSearch &&
+              matchMinAmount &&
+              matchMaxAmount &&
+              matchDate;
         }).toList();
 
         return CustomScrollView(
@@ -247,6 +280,111 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                             : null,
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 12, horizontal: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.tune, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Filtros avanzados',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const Spacer(),
+                              if (_hasAdvancedFilters)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedStatuses.clear();
+                                      _lastDays = null;
+                                      _minAmountCtrl.clear();
+                                      _maxAmountCtrl.clear();
+                                    });
+                                  },
+                                  child: const Text('Limpiar todo'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _minAmountCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Monto mín.',
+                                    prefixText: '\$ ',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: _maxAmountCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Monto máx.',
+                                    prefixText: '\$ ',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [7, 30, 90].map((days) {
+                                final selected = _lastDays == days;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text('Últimos $days días'),
+                                    selected: selected,
+                                    onSelected: (_) =>
+                                        setState(() => _lastDays = selected ? null : days),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: AppConstants.caseStates.map((status) {
+                              final selected = _selectedStatuses.contains(status);
+                              return FilterChip(
+                                label: Text(status),
+                                selected: selected,
+                                onSelected: (_) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedStatuses.remove(status);
+                                    } else {
+                                      _selectedStatuses.add(status);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 10),

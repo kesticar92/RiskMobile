@@ -58,6 +58,12 @@ class AppConstants {
 
   /// RF26: longitud máxima por mensaje en chat.
   static const int chatMessageMaxLength = 500;
+  static const List<String> advisorChatTemplates = [
+    'Hola, revisé tu caso. Por favor comparte los documentos pendientes para continuar.',
+    'Tu caso está en análisis. Te actualizaré apenas tenga novedades.',
+    'Encontramos observaciones en los soportes. Por favor vuelve a cargar el archivo con mejor calidad.',
+    'Gracias por la información. Continuamos con la validación de tu solicitud.',
+  ];
 
   // Document review states (RF38)
   static const String documentPendingReview = 'Pendiente de revisión';

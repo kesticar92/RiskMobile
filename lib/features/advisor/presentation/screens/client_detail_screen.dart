@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/financial_profile_model.dart';
@@ -44,11 +45,27 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   }
 
   Future<void> _updateStatus(String status) async {
+    final current = _profile;
+    if (current == null || current.caseStatus == status) return;
     setState(() => _updatingStatus = true);
     try {
-      await ref
-          .read(firestoreServiceProvider)
-          .updateCaseStatus(widget.profileId, status);
+      final fs = ref.read(firestoreServiceProvider);
+      final advisorUid = ref.read(authServiceProvider).currentUser?.uid ?? 'unknown';
+      await fs.updateCaseStatus(widget.profileId, status);
+      await fs.appendCaseStatusHistory(
+        caseId: widget.profileId,
+        fromStatus: current.caseStatus,
+        toStatus: status,
+        changedByUid: advisorUid,
+      );
+      await fs.createNotification(
+        userId: current.clientId,
+        title: 'Actualización de tu caso',
+        message:
+            'Tu caso cambió de "${current.caseStatus}" a "$status".',
+        caseId: current.id,
+        type: 'case_status_changed',
+      );
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -286,6 +303,76 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                                 if (v != null) _updateStatus(v);
                               },
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Historial de estados',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 10),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: ref
+                          .read(firestoreServiceProvider)
+                          .streamCaseStatusHistory(p.id),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        final history = snapshot.data?.docs ?? [];
+                        if (history.isEmpty) {
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Text(
+                              'Aún no hay cambios de estado registrados.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          );
+                        }
+                        return Column(
+                          children: history.map((h) {
+                            final data = h.data() as Map<String, dynamic>;
+                            final from = (data['fromStatus'] as String?) ?? 'Sin estado';
+                            final to = (data['toStatus'] as String?) ?? 'Sin estado';
+                            final changedAt = (data['changedAt'] as Timestamp?)?.toDate();
+                            return Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$from  →  $to',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (changedAt != null)
+                                    Text(
+                                      AppFormatters.date(changedAt),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
                     Text('Documentos del caso',
