@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
@@ -286,12 +287,13 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
       case 1:
         if (!_hasObligations) return true;
         if (_obligations.isEmpty) return false;
+        // Datos mínimos por obligación. Los extractos por deuda (RF12) se exigen
+        // en la pantalla de documentos, no aquí — exigirlos bloqueaba "Continuar"
+        // con 3+ deudas y rompía la demo.
         return _obligations.every((o) =>
             o.entity.trim().length >= 2 &&
             o.creditType.trim().isNotEmpty &&
-            o.monthlyPayment > 0 &&
-            (o.bankExtractFileName != null &&
-                o.bankExtractFileName!.trim().isNotEmpty));
+            o.monthlyPayment > 0);
       case 2:
         if (_selectedCreditType == null) return false;
         if (desiredAmount < 0) return false;
@@ -501,11 +503,9 @@ class _ObligationsPageState extends State<_ObligationsPage> {
       }
       return;
     }
-    if (widget.obligations.length != _localList.length) {
-      _localList
-        ..clear()
-        ..addAll(widget.obligations);
-    }
+    // No resincronizar por solo `length`: podía pisar la lista local y provocar
+    // pérdida de filas o índices inconsistentes. La lista la gobierna este State
+    // vía `onObligationsChanged` desde el padre.
   }
 
   void _addObligation() {
@@ -578,17 +578,67 @@ class _ObligationsPageState extends State<_ObligationsPage> {
                 ),
               )
             else
-              ..._localList.asMap().entries.map((e) => _ObligationTile(
-                    obligation: e.value,
-                    onRemove: () {
-                      setState(() => _localList.removeAt(e.key));
-                      widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
-                    },
-                    onUpdate: (updated) {
-                      setState(() => _localList[e.key] = updated);
-                      widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
-                    },
-                  )),
+              ...List.generate(_localList.length, (i) {
+                final ob = _localList[i];
+                return _ObligationTile(
+                  key: ValueKey(
+                    ob.clientRowId ??
+                        '${ob.entity}_${ob.creditType}_${ob.monthlyPayment}_$i',
+                  ),
+                  obligation: ob,
+                  onRemove: () {
+                    setState(() {
+                      if (ob.clientRowId != null) {
+                        _localList.removeWhere(
+                          (x) => x.clientRowId == ob.clientRowId,
+                        );
+                      } else {
+                        final j = _localList.indexWhere(
+                          (x) =>
+                              x.entity == ob.entity &&
+                              x.creditType == ob.creditType &&
+                              x.monthlyPayment == ob.monthlyPayment &&
+                              x.balance == ob.balance &&
+                              x.bankExtractFileName == ob.bankExtractFileName,
+                        );
+                        if (j >= 0) {
+                          _localList.removeAt(j);
+                        }
+                      }
+                      widget.onObligationsChanged(
+                        List<FinancialObligation>.from(_localList),
+                      );
+                    });
+                  },
+                  onUpdate: (updated) {
+                    setState(() {
+                      if (ob.clientRowId != null) {
+                        final j = _localList.indexWhere(
+                          (x) => x.clientRowId == ob.clientRowId,
+                        );
+                        if (j >= 0) {
+                          _localList[j] = updated;
+                        }
+                      } else {
+                        final j = _localList.indexWhere(
+                          (x) =>
+                              x.entity == ob.entity &&
+                              x.creditType == ob.creditType &&
+                              x.monthlyPayment == ob.monthlyPayment &&
+                              x.balance == ob.balance &&
+                              x.bankExtractFileName == ob.bankExtractFileName,
+                        );
+                        if (j >= 0) {
+                          _localList[j] = updated;
+                        }
+                      }
+                      widget.onObligationsChanged(
+                        List<FinancialObligation>.from(_localList),
+                      );
+                    });
+                  },
+                );
+              }),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _addObligation,
@@ -614,6 +664,7 @@ class _ObligationTile extends StatelessWidget {
   final ValueChanged<FinancialObligation> onUpdate;
 
   const _ObligationTile({
+    super.key,
     required this.obligation,
     required this.onRemove,
     required this.onUpdate,
@@ -627,13 +678,7 @@ class _ObligationTile extends StatelessWidget {
     if (result == null || result.files.isEmpty) return;
     final name = result.files.single.name;
     if (name.isEmpty) return;
-    onUpdate(FinancialObligation(
-      entity: obligation.entity,
-      creditType: obligation.creditType,
-      monthlyPayment: obligation.monthlyPayment,
-      balance: obligation.balance,
-      bankExtractFileName: name,
-    ));
+    onUpdate(obligation.copyWith(bankExtractFileName: name));
   }
 
   @override
@@ -825,6 +870,7 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
                 creditType: _type,
                 monthlyPayment: payment,
                 balance: balance,
+                clientRowId: const Uuid().v4(),
               );
               widget.onAdd(ob);
               Navigator.pop(context);

@@ -403,3 +403,9 @@ Resumen de la iteración más reciente alineada con `RESUMEN_PARA_EXPOSICION_RAM
 - Documentos / historial: `documents_screen.dart`, `evaluations_history_screen.dart`.
 - Dependencias: `pubspec.yaml`, `pubspec.lock`.
 - Resúmenes: `RESUMEN_PARA_EXPOSICION_RAMOS.md`, `README.md`, este archivo.
+
+### 15.4 Corrección — paso 2 entrevista (obligaciones / deudas)
+
+Tras la exposición se detectó que **no se podía avanzar bien** al declarar **varias** obligaciones: el botón **Continuar** exigía **extracto bancario** en **todas** las filas antes de salir del paso 2, y los índices del listado provocaban errores al eliminar o actualizar filas.
+
+**Ajustes:** en el paso 2 solo se validan entidad, tipo y cuota; los extractos por obligación siguen siendo obligatorios en **Mis documentos** (RF12). Cada obligación nueva lleva `clientRowId` (solo UI) para listas estables; `toFirestore` no persiste ese campo.

@@ -11,29 +11,55 @@ class FinancialObligation {
   /// RF12: nombre del extracto bancario adjunto como soporte de la obligación.
   final String? bankExtractFileName;
 
+  /// Identidad estable en la UI (entrevista); no se persiste en Firestore.
+  final String? clientRowId;
+
   const FinancialObligation({
     required this.entity,
     required this.creditType,
     required this.monthlyPayment,
     this.balance,
     this.bankExtractFileName,
+    this.clientRowId,
   });
 
-  Map<String, dynamic> toMap() => {
-    'entity': entity,
-    'creditType': creditType,
-    'monthlyPayment': monthlyPayment,
-    'balance': balance,
-    'bankExtractFileName': bankExtractFileName,
-  };
+  /// Solo campos que van a Firestore (sin `clientRowId`).
+  Map<String, dynamic> toFirestoreMap() => {
+        'entity': entity,
+        'creditType': creditType,
+        'monthlyPayment': monthlyPayment,
+        'balance': balance,
+        'bankExtractFileName': bankExtractFileName,
+      };
 
-  factory FinancialObligation.fromMap(Map<String, dynamic> map) => FinancialObligation(
-    entity: map['entity'] ?? '',
-    creditType: map['creditType'] ?? '',
-    monthlyPayment: (map['monthlyPayment'] ?? 0).toDouble(),
-    balance: map['balance']?.toDouble(),
-    bankExtractFileName: map['bankExtractFileName'] as String?,
-  );
+  Map<String, dynamic> toMap() => toFirestoreMap();
+
+  FinancialObligation copyWith({
+    String? entity,
+    String? creditType,
+    double? monthlyPayment,
+    double? balance,
+    String? bankExtractFileName,
+    String? clientRowId,
+  }) =>
+      FinancialObligation(
+        entity: entity ?? this.entity,
+        creditType: creditType ?? this.creditType,
+        monthlyPayment: monthlyPayment ?? this.monthlyPayment,
+        balance: balance ?? this.balance,
+        bankExtractFileName: bankExtractFileName ?? this.bankExtractFileName,
+        clientRowId: clientRowId ?? this.clientRowId,
+      );
+
+  factory FinancialObligation.fromMap(Map<String, dynamic> map) =>
+      FinancialObligation(
+        entity: map['entity'] ?? '',
+        creditType: map['creditType'] ?? '',
+        monthlyPayment: (map['monthlyPayment'] ?? 0).toDouble(),
+        balance: map['balance']?.toDouble(),
+        bankExtractFileName: map['bankExtractFileName'] as String?,
+        clientRowId: null,
+      );
 }
 
 class FinancialProfileModel {
@@ -154,7 +180,7 @@ class FinancialProfileModel {
       'contractType': contractType,
       'seniorityMonths': seniorityMonths,
       'monthlyIncome': monthlyIncome,
-      'obligations': obligations.map((o) => o.toMap()).toList(),
+      'obligations': obligations.map((o) => o.toFirestoreMap()).toList(),
       'totalMonthlyPayments': totalMonthlyPayments,
       'debtLevel': debtLevel,
       'availableCapacity': availableCapacity,
