@@ -679,7 +679,7 @@ Para dejar trazabilidad de autoria en historial Git de la rama `kevin-main`, est
 
 ## 11) Segunda oleada — 5 requerimientos `kevin-main` (RF-K5–K9) y 5 `brandon-main` (RF-B5–B9) — 18/04/2026
 
-Implementación en código sobre la misma base; para **autoría Git** conviene que Kevin haga commit/push en `kevin-main` de los archivos del bloque asesor y Brandon en `brandon-main` del bloque documentos (o merge cruzado según acuerden).
+Implementación en código sobre la misma base. **Autoría por rama y merges** entre `kevin-main` y `brandon-main`: ver **11.5**.
 
 ### 11.1) `kevin-main` — RF-K5 a RF-K9
 
@@ -722,4 +722,21 @@ Implementación en código sobre la misma base; para **autoría Git** conviene q
 | **RF-K14** | Copiar listado filtrado (TSV) | Botón que copia al portapapeles columnas separadas por tabulador (Excel/Sheets) de la vista filtrada actual (`advisor_dashboard_screen.dart`). |
 
 **Contacto WhatsApp (apoyo a K13/K10 en demo):** si el cliente tiene `phone` en `users`, botón “Contactar por WhatsApp” en detalle (`url_launcher`, enlace `wa.me`).
+
+### 11.5) Ramas por autoría y cuándo hacer merge
+
+**Regla del equipo (desde abril 2026):**
+
+- **`kevin-main`:** solo deben **apuntar aquí** los commits del bloque **asesor / Kevin** (p. ej. `feat(kevin): …`, chores de acuerdo). No versionar en esta rama el commit dedicado `feat(brandon): …` (RF-B5–B9 documentos).
+- **`brandon-main`:** lleva la **misma base** que `kevin-main` (mismos commits de Kevin debajo) y encima el commit **`feat(brandon): …`** con documentos, Storage, historial, `pubspec` cuando aplique.
+
+**Cuándo hace falta merge**
+
+| Situación | Acción recomendada |
+|-----------|---------------------|
+| Brandon subió **RF-B…** en `brandon-main` y Kevin necesita **probar la app completa** en su rama | En `kevin-main`: `git fetch origin` y `git merge origin/brandon-main` (o PR), resolver conflictos si los hay, y `git push origin kevin-main`. |
+| Kevin subió **RF-K…** en `kevin-main` y Brandon debe seguir | En `brandon-main`: `git fetch origin` y `git merge origin/kevin-main` (o rebase/cherry-pick según acuerdo), luego push. |
+| Solo alinear código sin reescribir historial | Preferir **merge** entre ramas; evitar force-push salvo coordinación. |
+
+Tras un merge **de `brandon-main` hacia `kevin-main`**, el árbol de archivos de `kevin-main` queda alineado con el bloque documental hasta ese momento; el historial de `kevin-main` mostrará un commit de merge además de los commits propios de Kevin.
 
