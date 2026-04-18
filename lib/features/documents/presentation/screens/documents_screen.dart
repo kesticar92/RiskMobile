@@ -1,12 +1,14 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:uuid/uuid.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
@@ -39,6 +41,14 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     'RUT / Camara de comercio',
     'Resolucion de pension',
     'Otro soporte',
+  ];
+
+  /// RF-B5: tipos mínimos para barra de checklist (excluye "Otro soporte").
+  static const _checklistTypes = [
+    'Extracto bancario',
+    'Certificado laboral',
+    'RUT / Camara de comercio',
+    'Resolucion de pension',
   ];
 
   final List<_DocItem> _documents = [];
@@ -144,6 +154,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _showErr(validation.message ?? 'Archivo inválido.');
       return;
     }
+    await _optimizeImageItem(item);
     if (!mounted) return;
     setState(() => _documents.add(item));
   }
@@ -177,6 +188,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _showErr(validation.message ?? 'Archivo inválido.');
       return;
     }
+    await _optimizeImageItem(item);
     if (!mounted) return;
     setState(() => _documents.add(item));
   }
@@ -211,6 +223,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _showErr(validation.message ?? 'Archivo inválido.');
       return;
     }
+    await _optimizeImageItem(item);
     if (!mounted) return;
     setState(() => _documents.add(item));
   }
@@ -299,6 +312,32 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     } catch (_) {
       return null;
     }
+  }
+
+  /// RF-B6: reduce peso de JPEG/PNG grandes antes de subir.
+  Future<void> _optimizeImageItem(_DocItem item) async {
+    if (item.type != 'image') return;
+    final raw = await _readItemBytes(item);
+    if (raw == null || raw.lengthInBytes < 350 * 1024) return;
+    try {
+      final decoded = img.decodeImage(raw);
+      if (decoded == null) return;
+      var out = decoded;
+      if (out.width > 1600) {
+        out = img.copyResize(
+          out,
+          width: 1600,
+          interpolation: img.Interpolation.linear,
+        );
+      }
+      final outBytes =
+          Uint8List.fromList(img.encodeJpg(out, quality: 82));
+      if (outBytes.lengthInBytes >= raw.lengthInBytes) return;
+      item.bytes = outBytes;
+      item.path = '';
+      final base = item.name.replaceAll(RegExp(r'\.[^.]+$'), '');
+      item.name = '${base}_opt.jpg';
+    } catch (_) {}
   }
 
   Future<void> _saveDocuments() async {
@@ -585,6 +624,47 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                 ],
               ),
             ),
+            Builder(
+              builder: (context) {
+                final uid = ref.read(authServiceProvider).currentUser?.uid;
+                if (uid == null) return const SizedBox.shrink();
+                return StreamBuilder<bool>(
+                  stream: ref
+                      .read(firestoreServiceProvider)
+                      .streamHasUnreadDocumentRejected(uid),
+                  builder: (context, snap) {
+                    if (snap.data != true) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                      child: Material(
+                        color: AppColors.riskHigh.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: AppColors.riskHigh),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Tienes un documento marcado para reenvío. '
+                                  'Revisa notificaciones y sube un archivo nuevo.',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.riskHigh,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
             if (_uploading) ...[
               const SizedBox(height: 8),
               LinearProgressIndicator(value: _uploadProgress.clamp(0.0, 1.0)),
@@ -641,6 +721,85 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                         ],
                       ),
                     ).animate().fadeIn(duration: 300.ms),
+                    if (!_resolvingCase &&
+                        _resolvedCaseFolder != null &&
+                        _resolvedCaseFolder != 'pending') ...[
+                      Builder(
+                        builder: (context) {
+                          final uid =
+                              ref.read(authServiceProvider).currentUser?.uid;
+                          if (uid == null) return const SizedBox.shrink();
+                          return StreamBuilder<QuerySnapshot>(
+                            stream: ref
+                                .read(firestoreServiceProvider)
+                                .streamUserCaseDocuments(
+                                  userId: uid,
+                                  caseId: _resolvedCaseFolder!,
+                                ),
+                            builder: (context, snap) {
+                              final serverTypes = <String>{};
+                              for (final d in snap.data?.docs ?? []) {
+                                final m = d.data() as Map<String, dynamic>;
+                                final t = m['documentType'] as String?;
+                                if (t != null && t.isNotEmpty) {
+                                  serverTypes.add(t);
+                                }
+                              }
+                              for (final d in _documents) {
+                                serverTypes.add(d.documentType);
+                              }
+                              final done = _checklistTypes
+                                  .where((t) => serverTypes.contains(t))
+                                  .length;
+                              final total = _checklistTypes.length;
+                              final pct = total == 0 ? 0.0 : done / total;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Checklist de soportes ($done/$total)',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: LinearProgressIndicator(
+                                      value: pct,
+                                      minHeight: 8,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    children: _checklistTypes.map((t) {
+                                      final ok = serverTypes.contains(t);
+                                      return Chip(
+                                        avatar: Icon(
+                                          ok
+                                              ? Icons.check_circle
+                                              : Icons.radio_button_unchecked,
+                                          size: 18,
+                                          color: ok
+                                              ? AppColors.riskLow
+                                              : AppColors.textLight,
+                                        ),
+                                        label: Text(
+                                          t,
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     Text('Tipo de documentos',
                         style: Theme.of(context).textTheme.titleLarge),
@@ -702,14 +861,46 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                     if (_requiresBankStatement) ...[
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.riskMedium.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.riskMedium.withOpacity(0.25),
+                          ),
                         ),
-                        child: Text(
-                          'Se requieren $_requiredExtractCount extracto(s) bancario(s). Adjuntos: $_attachedExtractCount.',
-                          style: const TextStyle(fontSize: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Extractos por obligación ($_attachedExtractCount/'
+                              '$_requiredExtractCount)',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: _requiredExtractCount == 0
+                                    ? 0
+                                    : (_attachedExtractCount /
+                                            _requiredExtractCount)
+                                        .clamp(0.0, 1.0),
+                                minHeight: 8,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Debes adjuntar un extracto bancario por cada obligación declarada en tu entrevista.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -877,10 +1068,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
 class _DocItem {
   final String id;
-  final String name;
+  String name;
   final String type;
-  final String path;
-  final Uint8List? bytes;
+  String path;
+  Uint8List? bytes;
   final String documentType;
   _DocUploadStatus status;
   String? errorMessage;

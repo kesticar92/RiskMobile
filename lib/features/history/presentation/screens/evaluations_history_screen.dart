@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
@@ -149,6 +150,8 @@ class EvaluationsHistoryScreen extends ConsumerWidget {
                     final docType =
                         (data['documentType'] ?? 'Sin tipo') as String;
                     final status = (data['status'] ?? 'Sin estado') as String;
+                    final downloadUrl =
+                        (data['downloadUrl'] as String?)?.trim() ?? '';
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
@@ -161,6 +164,22 @@ class EvaluationsHistoryScreen extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text('$docType • $status'),
+                      trailing: downloadUrl.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Abrir enlace del archivo',
+                              icon: const Icon(Icons.open_in_new, size: 20),
+                              onPressed: () async {
+                                final uri = Uri.tryParse(downloadUrl);
+                                if (uri == null) return;
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(
+                                    uri,
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                }
+                              },
+                            ),
                     );
                   },
                 );
