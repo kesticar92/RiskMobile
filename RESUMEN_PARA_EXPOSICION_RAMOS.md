@@ -1,5 +1,7 @@
 # Resumen para exposicion por ramas
 
+**Ultima actualizacion:** **18 de abril de 2026** (sabado). Incluye secciones **11** a **11.5** (RF-K5–K14, RF-B5–B9, flujo `kevin-main` / `brandon-main` y criterios de merge).
+
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
 ---

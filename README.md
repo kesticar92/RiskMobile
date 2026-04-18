@@ -2,6 +2,24 @@
 
 **Plataforma móvil SaaS de evaluación financiera, simulación crediticia y gestión de asesoría para asesores financieros independientes.**
 
+**Última actualización de este README:** **18/04/2026** — iteración CRM Kevin (RF-K5–K14), documentos Brandon (RF-B5–B9), flujo de ramas `kevin-main` / `brandon-main`, merge de sincronización y documentación en `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§11.5) y `RESUMEN_ENTREGABLE.md` (§15).
+
+---
+
+## Cambios del día — 18/04/2026
+
+### Resumen (18/04/2026)
+
+- **Kevin (`kevin-main`):** RF-K5–K9 (nota interna, búsqueda por ID, orden CRM, copiar resumen, chip estancamiento); RF-K10–K14 (prioridad, filtro prioridad, snippet nota en tarjeta, documentos pendientes de revisión, export TSV, WhatsApp si hay teléfono).
+- **Brandon (`brandon-main`):** RF-B5–B9 (checklist soportes, compresión imagen, banner reenvío documento, progreso extractos, abrir enlace en historial; `package:image`).
+- **Git:** commits de bloque Kevin en `kevin-main`; commit `feat(brandon)` en `brandon-main`; merge `brandon-main` → `kevin-main` para código alineado; `.cursor/` en `.gitignore`.
+- **Documentación:** `RESUMEN_PARA_EXPOSICION_RAMOS.md` §11–11.5; `RESUMEN_ENTREGABLE.md` §15.
+
+### Rutas útiles para demo
+
+1. Asesor: CRM, detalle de cliente (nota, prioridad, documentos pendientes, WhatsApp, copiar resumen).
+2. Cliente: documentos (checklist, banner, extractos), historial (abrir URL).
+
 ---
 
 ## Cambios del día — 16/04/2026

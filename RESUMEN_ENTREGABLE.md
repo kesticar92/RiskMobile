@@ -1,5 +1,7 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
+**Última actualización del documento:** **18 de abril de 2026** (sábado). Ver **§15** para la iteración más reciente (CRM Kevin, documentos Brandon, ramas y merge).
+
 Documento para exposición y referencia del equipo.
 
 ---
@@ -325,7 +327,7 @@ Pueden funcionar bien si siempre se abrieron con `push`; si en algún flujo se u
 
 ---
 
-*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17, **sesión 4 (22-mar-2026):** RF23-RF25-RF26, navegación, simulador por línea de crédito, RF08-RF09-RF35). **Checkpoint:** sección 13 — subida Brandon pendiente.*
+*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17, **sesión 4 (22-mar-2026):** RF23-RF25-RF26, navegación, simulador por línea de crédito, RF08-RF09-RF35; **sesión 5 (16-abr-2026):** RF-B1–B4, RF-K1–K4; **sesión 6 (18-abr-2026):** RF-K5–K14, RF-B5–B9, flujo de ramas y merge — ver §15).*
 
 ---
 
@@ -372,3 +374,32 @@ En esta sesión se ejecutaron mejoras funcionales para documentos, CRM asesor, t
 ### 14.4 Archivos creados hoy
 
 - No se crearon archivos nuevos en esta sesión; se modificaron archivos existentes.
+
+---
+
+## 15. Avance sesión del **18 de abril de 2026** (sábado)
+
+Resumen de la iteración más reciente alineada con `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§11–11.5).
+
+### 15.1 Requerimientos en código
+
+| Bloque | IDs | Resumen breve |
+|--------|-----|-----------------|
+| **Kevin** | RF-K5 a RF-K9 | Nota interna asesor, búsqueda por ID de caso, orden de lista CRM, copiar resumen del caso, chip +7 d sin cambios. |
+| **Brandon** | RF-B5 a RF-B9 | Checklist de soportes, optimización JPEG previa a subida, aviso reenvío documento, progreso extractos por obligación, abrir URL en historial; dependencia `image`. |
+| **Kevin** | RF-K10 a RF-K14 | Prioridad de caso, filtro “Solo prioridad”, snippet de nota en tarjeta CRM, contador documentos pendientes de revisión, export TSV; contacto WhatsApp si hay teléfono en `users`. |
+
+### 15.2 Ramas Git y merge
+
+- **`kevin-main`:** commits propios del bloque asesor (Kevin) y `chore` de `.gitignore` (carpeta `.cursor/` no versionada).
+- **`brandon-main`:** misma base que Kevin más el commit **`feat(brandon): …`** (documentos).
+- **`kevin-main`** incorporó documentos mediante **merge** desde `brandon-main` (`Merge brandon-main: sincronizar RF-B5 a RF-B9 en linea kevin-main`) para tener el mismo código al probar la app.
+- Documentación del flujo: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §11.5** y este **§15**.
+
+### 15.3 Archivos tocados (referencia)
+
+- Asesor / CRM: `advisor_dashboard_screen.dart`, `client_detail_screen.dart`.
+- Servicios / modelo: `firestore_service.dart`, `financial_profile_model.dart`.
+- Documentos / historial: `documents_screen.dart`, `evaluations_history_screen.dart`.
+- Dependencias: `pubspec.yaml`, `pubspec.lock`.
+- Resúmenes: `RESUMEN_PARA_EXPOSICION_RAMOS.md`, `README.md`, este archivo.
