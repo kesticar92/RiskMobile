@@ -62,3 +62,6 @@ GoogleService-Info.plist
 
 # Local helper scripts (no versionar)
 /tools/
+
+# Cursor (configuración local; no subir a GitHub)
+.cursor/
