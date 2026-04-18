@@ -675,3 +675,51 @@ Para dejar trazabilidad de autoria en historial Git de la rama `kevin-main`, est
 - **RF-K3:** plantillas rapidas en chat.
 - **RF-K4:** notificacion al cliente por cambio de estado.
 
+---
+
+## 11) Segunda oleada — 5 requerimientos `kevin-main` (RF-K5–K9) y 5 `brandon-main` (RF-B5–B9) — 18/04/2026
+
+Implementación en código sobre la misma base; para **autoría Git** conviene que Kevin haga commit/push en `kevin-main` de los archivos del bloque asesor y Brandon en `brandon-main` del bloque documentos (o merge cruzado según acuerden).
+
+### 11.1) `kevin-main` — RF-K5 a RF-K9
+
+| ID | Nombre | Qué hace |
+|----|--------|------------|
+| **RF-K5** | Nota interna del asesor | Campo `advisorInternalNote` / `advisorNoteUpdatedAt` en el caso; editor y guardado en detalle de cliente (`client_detail_screen.dart`); método `updateCaseAdvisorNote` en `firestore_service.dart`. |
+| **RF-K6** | Búsqueda por ID de caso | En CRM, el buscador coincide también con `profile.id` (`advisor_dashboard_screen.dart`). |
+| **RF-K7** | Orden de lista CRM | Chips **Última actualización** (desc) y **Nombre A–Z** (`_ClientSort` en `advisor_dashboard_screen.dart`). |
+| **RF-K8** | Copiar resumen del caso | Botón en cabecera de detalle; texto plano con datos clave vía portapapeles (`Clipboard`). |
+| **RF-K9** | Indicador de caso “estancado” | En tarjeta de cliente, chip **+7 d sin cambios** si `updatedAt` tiene 7 días o más (`_ClientCard`). |
+
+**Archivos típicos:** `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`, `lib/features/advisor/presentation/screens/client_detail_screen.dart`, `lib/core/services/firestore_service.dart`, `lib/shared/models/financial_profile_model.dart` (solo lectura de campos de nota).
+
+### 11.2) `brandon-main` — RF-B5 a RF-B9
+
+| ID | Nombre | Qué hace |
+|----|--------|------------|
+| **RF-B5** | Checklist de soportes clave | Barra y chips por tipo (extracto, certificado, RUT, pensión) combinando cola local + documentos ya en Firestore (`documents_screen.dart`). |
+| **RF-B6** | Optimización de imagen antes de subir | Si la imagen supera ~350 KB, reescala ancho máx. 1600 px y reencode JPEG calidad 82 cuando reduce tamaño (`package:image`, `documents_screen.dart`). |
+| **RF-B7** | Abrir documento histórico | En el bottom sheet de historial de evaluaciones, botón para abrir `downloadUrl` con `url_launcher` (`evaluations_history_screen.dart`). |
+| **RF-B8** | Aviso de reenvío de documento | Banner en pantalla de documentos si hay notificación no leída tipo `document_rejected` (`streamHasUnreadDocumentRejected` en `firestore_service.dart`). |
+| **RF-B9** | Progreso visual de extractos por obligación | Bloque con título, barra de progreso y texto guía cuando aplica `_requiresBankStatement` (`documents_screen.dart`). |
+
+**Dependencia nueva:** `image` en `pubspec.yaml` (compresión/resize RF-B6).
+
+### 11.3) Demo sugerida
+
+1. Asesor: CRM — buscar por ID, ordenar, ver chip +7 d, abrir caso — nota interna — copiar resumen.
+2. Cliente: Documentos — checklist, banner reenvío (tras rechazo desde asesor), barra de extractos, subir imagen grande y verificar peso.
+3. Cliente: Historial — ver documentos del caso — abrir enlace.
+
+### 11.4) Tercera tanda solo `kevin-main` — RF-K10 a RF-K14
+
+| ID | Nombre | Qué hace |
+|----|--------|------------|
+| **RF-K10** | Prioridad alta en cartera | Campo `casePriority` en el caso; `updateCasePriority` en `firestore_service.dart`; interruptor en detalle de cliente. No se incluye en `toFirestore()` del perfil cliente para no pisar el flag al guardar entrevista. |
+| **RF-K11** | Filtro “Solo prioridad” | `FilterChip` en CRM con conteo de casos prioritarios; se limpia con “Limpiar todo” (`advisor_dashboard_screen.dart`). |
+| **RF-K12** | Vista previa de nota interna en tarjeta | Si existe `advisorInternalNote`, se muestra un renglón corto en la tarjeta del listado (`_ClientCard`). |
+| **RF-K13** | Contador documentos pendientes de revisión | En detalle de cliente, tarjeta con stream de documentos del caso y conteo con estado `Pendiente de revisión` (`client_detail_screen.dart`). |
+| **RF-K14** | Copiar listado filtrado (TSV) | Botón que copia al portapapeles columnas separadas por tabulador (Excel/Sheets) de la vista filtrada actual (`advisor_dashboard_screen.dart`). |
+
+**Contacto WhatsApp (apoyo a K13/K10 en demo):** si el cliente tiene `phone` en `users`, botón “Contactar por WhatsApp” en detalle (`url_launcher`, enlace `wa.me`).
+

@@ -91,6 +91,13 @@ class FinancialProfileModel {
   // Monto estimado viable (calculado por el simulador)
   double? estimatedViableAmount;
 
+  /// Nota interna del asesor (solo CRM). No se envía desde flujos cliente en toFirestore.
+  final String? advisorInternalNote;
+  final DateTime? advisorNoteUpdatedAt;
+
+  /// Prioridad alta marcada por el asesor (solo vía CRM). No va en toFirestore del cliente.
+  final bool casePriority;
+
   FinancialProfileModel({
     required this.id,
     required this.clientId,
@@ -107,6 +114,9 @@ class FinancialProfileModel {
     required this.createdAt,
     required this.updatedAt,
     this.estimatedViableAmount,
+    this.advisorInternalNote,
+    this.advisorNoteUpdatedAt,
+    this.casePriority = false,
   });
 
   factory FinancialProfileModel.fromFirestore(DocumentSnapshot doc) {
@@ -129,6 +139,10 @@ class FinancialProfileModel {
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       estimatedViableAmount: d['estimatedViableAmount']?.toDouble(),
+      advisorInternalNote: d['advisorInternalNote'] as String?,
+      advisorNoteUpdatedAt:
+          (d['advisorNoteUpdatedAt'] as Timestamp?)?.toDate(),
+      casePriority: d['casePriority'] == true,
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,8 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/financial_profile_model.dart';
 import '../../../../shared/models/user_model.dart';
+
+enum _ClientSort { byUpdatedDesc, byNameAsc }
 
 class AdvisorDashboardScreen extends ConsumerStatefulWidget {
   const AdvisorDashboardScreen({super.key});
@@ -168,6 +171,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
   String _search = '';
   final Set<String> _selectedStatuses = {};
   int? _lastDays;
+  _ClientSort _sortMode = _ClientSort.byUpdatedDesc;
+  bool _filterPriorityOnly = false;
 
   @override
   void dispose() {
@@ -187,7 +192,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
       _selectedStatuses.isNotEmpty ||
       _lastDays != null ||
       _minAmountCtrl.text.trim().isNotEmpty ||
-      _maxAmountCtrl.text.trim().isNotEmpty;
+      _maxAmountCtrl.text.trim().isNotEmpty ||
+      _filterPriorityOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -209,25 +215,40 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
             total > 0 ? ((approvedCount / total) * 100).round() : 0;
         final inProgressPct =
             total > 0 ? ((inProgressCount / total) * 100).round() : 0;
+        final q = _search.toLowerCase().trim();
         final filtered = allProfiles.where((p) {
           final matchStatus = (widget.filterStatus == 'Todos' ||
                   p.caseStatus == widget.filterStatus) &&
               (_selectedStatuses.isEmpty ||
                   _selectedStatuses.contains(p.caseStatus));
-          final matchSearch = _search.isEmpty ||
-              p.clientName.toLowerCase().contains(_search.toLowerCase());
+          final matchSearch = q.isEmpty ||
+              p.clientName.toLowerCase().contains(q) ||
+              p.id.toLowerCase().contains(q);
           final matchMinAmount =
               minAmount == null || p.desiredAmount >= minAmount;
           final matchMaxAmount =
               maxAmount == null || p.desiredAmount <= maxAmount;
           final matchDate = _lastDays == null ||
               now.difference(p.updatedAt).inDays <= _lastDays!;
+          final matchPriority =
+              !_filterPriorityOnly || p.casePriority;
           return matchStatus &&
               matchSearch &&
               matchMinAmount &&
               matchMaxAmount &&
-              matchDate;
-        }).toList();
+              matchDate &&
+              matchPriority;
+        }).toList()
+          ..sort((a, b) {
+            switch (_sortMode) {
+              case _ClientSort.byUpdatedDesc:
+                return b.updatedAt.compareTo(a.updatedAt);
+              case _ClientSort.byNameAsc:
+                return a.clientName
+                    .toLowerCase()
+                    .compareTo(b.clientName.toLowerCase());
+            }
+          });
 
         return CustomScrollView(
           slivers: [
@@ -267,7 +288,7 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                       controller: _searchCtrl,
                       onChanged: (v) => setState(() => _search = v),
                       decoration: InputDecoration(
-                        hintText: 'Buscar cliente...',
+                        hintText: 'Buscar por cliente o ID de caso...',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _search.isNotEmpty
                             ? IconButton(
@@ -280,6 +301,80 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                             : null,
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 12, horizontal: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Ordenar lista',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('Última actualización'),
+                            selected: _sortMode == _ClientSort.byUpdatedDesc,
+                            onSelected: (_) => setState(
+                              () => _sortMode = _ClientSort.byUpdatedDesc,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('Nombre A–Z'),
+                            selected: _sortMode == _ClientSort.byNameAsc,
+                            onSelected: (_) => setState(
+                              () => _sortMode = _ClientSort.byNameAsc,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilterChip(
+                        label: Text(
+                          'Solo prioridad (${allProfiles.where((x) => x.casePriority).length})',
+                        ),
+                        selected: _filterPriorityOnly,
+                        onSelected: (v) =>
+                            setState(() => _filterPriorityOnly = v),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: filtered.isEmpty
+                            ? null
+                            : () {
+                                const h =
+                                    'Cliente\tID caso\tEstado\tMonto deseado\tPrioridad\tActualizado';
+                                final rows = filtered
+                                    .map(
+                                      (p) =>
+                                          '${p.clientName}\t${p.id}\t${p.caseStatus}\t${p.desiredAmount}\t${p.casePriority ? "Sí" : "No"}\t${AppFormatters.dateTime(p.updatedAt)}',
+                                    )
+                                    .join('\n');
+                                Clipboard.setData(
+                                  ClipboardData(text: '$h\n$rows'),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Listado copiado (TSV). Pégalo en Excel o Sheets.',
+                                    ),
+                                  ),
+                                );
+                              },
+                        icon: const Icon(Icons.table_chart_outlined, size: 18),
+                        label: const Text('Copiar listado filtrado (TSV)'),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -309,6 +404,7 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                                       _lastDays = null;
                                       _minAmountCtrl.clear();
                                       _maxAmountCtrl.clear();
+                                      _filterPriorityOnly = false;
                                     });
                                   },
                                   child: const Text('Limpiar todo'),
@@ -525,106 +621,170 @@ class _ClientCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statusColor = _statusColor(profile.caseStatus);
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.clientDetail, extra: profile.id),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border, width: 0.5),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withOpacity(0.04),
-              blurRadius: 15,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Avatar
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Center(
-                child: Text(
-                  profile.clientName.isNotEmpty
-                      ? profile.clientName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
-                  ),
+    final noteRaw = profile.advisorInternalNote?.trim();
+    String? noteShort;
+    if (noteRaw != null && noteRaw.isNotEmpty) {
+      final oneLine = noteRaw.replaceAll(RegExp(r'\s+'), ' ');
+      noteShort =
+          oneLine.length > 48 ? '${oneLine.substring(0, 45)}…' : oneLine;
+    }
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border, width: 0.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () =>
+                  context.push(AppRoutes.clientDetail, extra: profile.id),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Center(
+                        child: Text(
+                          profile.clientName.isNotEmpty
+                              ? profile.clientName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (profile.casePriority) ...[
+                                Icon(Icons.star,
+                                    size: 17, color: AppColors.riskMedium),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  profile.clientName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _ScoreBadge(score: profile.riskScore),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${profile.economicActivity} • ${AppFormatters.currency(profile.monthlyIncome)}/mes',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          if (noteShort != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              noteShort,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                                color: AppColors.primaryBlueDark,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  profile.caseStatus,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                AppFormatters.timeAgo(profile.updatedAt),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textLight,
+                                ),
+                              ),
+                              if (DateTime.now()
+                                      .difference(profile.updatedAt)
+                                      .inDays >=
+                                  7) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.riskMedium.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '+7 d sin cambios',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.riskMedium,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          profile.clientName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      _ScoreBadge(score: profile.riskScore),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${profile.economicActivity} • ${AppFormatters.currency(profile.monthlyIncome)}/mes',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          profile.caseStatus,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        AppFormatters.timeAgo(profile.updatedAt),
-                        style: TextStyle(
-                            fontSize: 10, color: AppColors.textLight),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textLight),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 12, right: 8),
+            child: Icon(Icons.chevron_right, color: AppColors.textLight),
+          ),
+        ],
       ),
     ).animate().fadeIn(delay: Duration(milliseconds: index * 60)).slideY(begin: 0.15);
   }

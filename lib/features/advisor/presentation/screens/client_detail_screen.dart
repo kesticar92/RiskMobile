@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -10,6 +12,7 @@ import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/financial_profile_model.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/widgets/glass_card.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/risk_score_widget.dart';
@@ -26,12 +29,22 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   FinancialProfileModel? _profile;
   bool _isLoading = true;
   bool _updatingStatus = false;
+  bool _savingAdvisorNote = false;
+  bool _priorityBusy = false;
   String? _advisorName;
+  UserModel? _clientUser;
+  final _advisorNoteCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _advisorNoteCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -44,11 +57,86 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     final p = await ref
         .read(firestoreServiceProvider)
         .getFinancialProfile(widget.profileId);
+    UserModel? clientUser;
+    if (p != null) {
+      clientUser = await auth.getUserData(p.clientId);
+    }
     if (!mounted) return;
     setState(() {
       _profile = p;
       _isLoading = false;
+      _clientUser = clientUser;
     });
+    if (p != null) {
+      _advisorNoteCtrl.text = p.advisorInternalNote ?? '';
+    }
+  }
+
+  Future<void> _setCasePriority(bool value) async {
+    setState(() => _priorityBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCasePriority(
+            caseId: widget.profileId,
+            priority: value,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              value ? 'Caso marcado como prioridad.' : 'Prioridad retirada.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _priorityBusy = false);
+    }
+  }
+
+  Future<void> _openWhatsAppContact() async {
+    final phone = _clientUser?.phone?.trim();
+    if (phone == null || phone.isEmpty) return;
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return;
+    final uri = Uri.parse('https://wa.me/$digits');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _saveAdvisorNote() async {
+    setState(() => _savingAdvisorNote = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseAdvisorNote(
+            caseId: widget.profileId,
+            note: _advisorNoteCtrl.text.trim(),
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nota interna guardada.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingAdvisorNote = false);
+    }
+  }
+
+  String _clipboardCaseSummary(FinancialProfileModel p) {
+    final b = StringBuffer()
+      ..writeln('RiskMobile — resumen de caso')
+      ..writeln('ID: ${p.id}')
+      ..writeln('Cliente: ${p.clientName}')
+      ..writeln('Estado: ${p.caseStatus}')
+      ..writeln('Actividad: ${p.economicActivity}')
+      ..writeln('Ingresos: ${AppFormatters.currency(p.monthlyIncome)}')
+      ..writeln('Cuotas: ${AppFormatters.currency(p.totalMonthlyPayments)}')
+      ..writeln('Capacidad disp.: ${AppFormatters.currency(p.availableCapacity)}')
+      ..writeln('Monto deseado: ${AppFormatters.currency(p.desiredAmount)}')
+      ..writeln('Score: ${p.riskScore} (${p.riskLabel})')
+      ..writeln('Actualizado: ${AppFormatters.dateTime(p.updatedAt)}');
+    return b.toString();
   }
 
   Future<void> _updateStatus(String status) async {
@@ -165,6 +253,46 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         ],
                       ),
                     ).animate().fadeIn(duration: 400.ms),
+                    const SizedBox(height: 12),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: ref
+                          .read(firestoreServiceProvider)
+                          .streamCaseDocuments(p.id),
+                      builder: (context, snap) {
+                        final pending = (snap.data?.docs ?? []).where((d) {
+                          final m = d.data() as Map<String, dynamic>;
+                          return (m['status'] as String?) ==
+                              AppConstants.documentPendingReview;
+                        }).length;
+                        return GlassCard(
+                          child: Row(
+                            children: [
+                              Icon(Icons.pending_actions_outlined,
+                                  color: AppColors.riskMedium, size: 22),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Documentos pendientes de revisión: $pending',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ).animate().fadeIn(delay: 40.ms),
+                    if (_clientUser?.phone != null &&
+                        _clientUser!.phone!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _openWhatsAppContact,
+                        icon: const Icon(Icons.chat, size: 20),
+                        label: const Text('Contactar por WhatsApp'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     GlassCard(
                       child: Column(
@@ -312,6 +440,18 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                               },
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Prioridad alta en cartera'),
+                      subtitle: const Text(
+                        'Destaca el caso en el panel del asesor y permite filtrarlo.',
+                      ),
+                      value: p.casePriority,
+                      onChanged: (_updatingStatus || _priorityBusy)
+                          ? null
+                          : (v) => _setCasePriority(v),
+                    ),
                     const SizedBox(height: 20),
                     Text('Historial de estados',
                         style: Theme.of(context).textTheme.titleLarge),
@@ -391,6 +531,47 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                           }).toList(),
                         );
                       },
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Nota interna (CRM)',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Visible solo para asesores. No se muestra al cliente.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _advisorNoteCtrl,
+                      maxLines: 4,
+                      minLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: 'Seguimiento, acuerdos, recordatorios…',
+                        border: OutlineInputBorder(),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    if (p.advisorNoteUpdatedAt != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Última edición: ${AppFormatters.dateTime(p.advisorNoteUpdatedAt!)}',
+                        style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _savingAdvisorNote ? null : _saveAdvisorNote,
+                        icon: _savingAdvisorNote
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save_outlined, size: 18),
+                        label: Text(_savingAdvisorNote ? 'Guardando…' : 'Guardar nota'),
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Text('Documentos del caso',
@@ -574,8 +755,22 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                     style: Theme.of(context).textTheme.headlineSmall),
                 Text(AppFormatters.date(p.createdAt),
                     style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'Caso: ${p.id}',
+                  style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Copiar resumen del caso',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: _clipboardCaseSummary(p)));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Resumen copiado al portapapeles.')),
+              );
+            },
+            icon: const Icon(Icons.copy_all_outlined),
           ),
         ],
       ),

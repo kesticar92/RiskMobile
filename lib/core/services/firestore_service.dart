@@ -64,6 +64,28 @@ class FirestoreService {
     });
   }
 
+  /// RF-K5: nota interna visible solo en CRM asesor.
+  Future<void> updateCaseAdvisorNote({
+    required String caseId,
+    required String note,
+  }) async {
+    await _db.collection(AppConstants.colCases).doc(caseId).update({
+      'advisorInternalNote': note,
+      'advisorNoteUpdatedAt': Timestamp.now(),
+    });
+  }
+
+  /// RF-K10: prioridad alta en cartera (solo asesor).
+  Future<void> updateCasePriority({
+    required String caseId,
+    required bool priority,
+  }) async {
+    await _db.collection(AppConstants.colCases).doc(caseId).update({
+      'casePriority': priority,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
   Future<void> appendCaseStatusHistory({
     required String caseId,
     required String fromStatus,
@@ -182,6 +204,20 @@ class FirestoreService {
         .where('read', isEqualTo: false)
         .snapshots()
         .map((s) => s.docs.length);
+  }
+
+  /// RF-B8: hay avisos sin leer de tipo reenvío de documento.
+  Stream<bool> streamHasUnreadDocumentRejected(String userId) {
+    return _db
+        .collection(AppConstants.colNotifications)
+        .where('userId', isEqualTo: userId)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map(
+          (s) => s.docs.any(
+            (d) => (d.data()['type'] as String?) == 'document_rejected',
+          ),
+        );
   }
 
   Future<void> saveSimulationResult({
