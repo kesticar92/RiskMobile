@@ -1,6 +1,6 @@
 # Resumen para exposicion por ramas
 
-**Ultima actualizacion:** **4 de mayo de 2026**. Incluye secciones **11** a **11.5** (RF-K5–K14, RF-B5–B9) y **12** (**RF-K15–K19** implementados en Kevin; **RF-B10–B14** aun backlog Brandon); flujo `kevin-main` / `brandon-main` en **11.5**.
+**Ultima actualizacion:** **8 de mayo de 2026**. Incluye secciones **11** a **11.5** (RF-K5–K14, RF-B5–B9) y **12** con **RF-K15–K19** y **RF-B10–B14** implementados, más estado de integración entre ramas.
 
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
@@ -744,9 +744,9 @@ Tras un merge **de `brandon-main` hacia `kevin-main`**, el árbol de archivos de
 
 ---
 
-## 12) Cuarta oleada — **RF-K15–K19** (`kevin-main`) y **RF-B10–B14** (`brandon-main`) — **04/05/2026**
+## 12) Cuarta oleada — **RF-K15–K19** (`kevin-main`) y **RF-B10–B14** (`brandon-main`) — **04/05/2026 a 08/05/2026**
 
-**Estado (04/05/2026):** **RF-K15–K19** implementados en codigo (rama de trabajo **`kevin-main`**). **RF-B10–B14** siguen como **definicion / backlog** (Brandon).
+**Estado (08/05/2026):** **RF-K15–K19** implementados en codigo (rama de trabajo **`kevin-main`**) y **RF-B10–B14** implementados en codigo en **`brandon-main`** (commit `315c79d`).
 
 **Archivos tocados (bloque Kevin):** `lib/shared/models/financial_profile_model.dart` (campos `nextFollowUpAt`, `caseTags`, `caseArchived`, `lastStatusChangeAt`); `lib/core/services/firestore_service.dart` (`updateCaseNextFollowUp`, `updateCaseTags`, `updateCaseArchived`, `getCaseStatusHistoryPlainText`, y `lastStatusChangeAt` al actualizar estado); `lib/features/advisor/presentation/screens/client_detail_screen.dart`; `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`.
 
@@ -760,24 +760,29 @@ Tras un merge **de `brandon-main` hacia `kevin-main`**, el árbol de archivos de
 | **RF-K18** | Linea de ultima actividad | `lastStatusChangeAt` se escribe al cambiar estado (`updateCaseStatus`). En tarjeta: texto **Última actividad ·** + `timeAgo(lastStatusChangeAt ?? updatedAt)` (sin consulta extra por fila). |
 | **RF-K19** | Copiar historial de estados | Boton **Copiar historial** junto al titulo del bloque; texto TSV legible vía `getCaseStatusHistoryPlainText` y portapapeles. **Copiar listado (TSV)** ampliado con columnas seguimiento, etiquetas, archivado. |
 
-### 12.2) `brandon-main` — RF-B10 a RF-B14 (**pendiente**)
+### 12.2) `brandon-main` — RF-B10 a RF-B14 (**implementados**)
 
-| ID | Nombre | Objetivo funcional | Cambios en codigo (propuestos) |
+| ID | Nombre | Objetivo funcional | Cambios en codigo (implementados) |
 |----|--------|--------------------|--------------------------------|
-| **RF-B10** | Agrupar documentos por tipo | Mejor escaneo visual: secciones por tipo de soporte (extracto, certificado, cedula, etc.) en lugar de una sola lista plana larga. | Agrupar la lista en memoria por campo de tipo/categoria; titulos de seccion opcionalmente colapsables en `documents_screen.dart`. |
-| **RF-B11** | Ordenar documentos | Permitir “Mas reciente primero” / “Mas antiguo primero” (por fecha de subida o `createdAt`). | Estado local de orden; `sort` sobre la lista antes de pintar; control segmentado o menu en app bar de documentos. |
-| **RF-B12** | Busqueda por nombre de archivo | Filtrar la lista por texto coincidente con nombre del archivo o etiqueta mostrada. | `TextField` o barra de busqueda; filtro en memoria `where` por substring del nombre. |
-| **RF-B13** | Vista en cuadrícula para imagenes | Para fotos, vista de miniaturas; para PDF u otros, mantener fila lista o icono generico. | `GridView` condicionado por tipo MIME o extension; reutilizar URLs de preview existentes en `documents_screen.dart`. |
-| **RF-B14** | Compartir o copiar enlace del documento | Desde la fila o preview, “Copiar enlace” o compartir URL de descarga (`downloadUrl`) con el sheet nativo del sistema. | `Clipboard` + opcional `share_plus` en `pubspec.yaml`; botones en sheet de preview / menu por documento. |
+| **RF-B10** | Agrupar documentos por tipo | Mejor escaneo visual: secciones por tipo de soporte en lugar de lista plana. | Agrupación en memoria por `documentType` y render por secciones en `documents_screen.dart`. |
+| **RF-B11** | Ordenar documentos | Permitir “Mas reciente primero” / “Mas antiguo primero”. | Toggle de orden + `sort` por `createdAt` sobre documentos almacenados. |
+| **RF-B12** | Busqueda por nombre de archivo | Filtrar por texto coincidente con nombre o tipo. | Campo `TextField` con filtro en memoria por `fileName` y `documentType`. |
+| **RF-B13** | Vista en cuadrícula para imagenes | Mostrar imágenes en miniaturas para navegación más rápida. | Vista `GridView` para documentos de tipo imagen y opción de volver a lista. |
+| **RF-B14** | Compartir o copiar enlace del documento | Permitir reutilizar URL de descarga desde la app. | `Clipboard` para copiar y `share_plus` para compartir `downloadUrl`. |
 
 ### 12.3) Demo sugerida
 
 1. **Kevin (listo):** CRM — orden **Próx. seguimiento**, filtros por etiqueta e **Incluir archivados**; detalle — seguimiento, etiquetas, archivar; **Copiar historial**; tarjeta con última actividad y chip de seguimiento.
-2. **Brandon (cuando RF-B10–B14 esten en codigo):** Documentos — agrupar, ordenar, buscar, cuadrícula, copiar enlace.
+2. **Brandon (listo):** Documentos — agrupar, ordenar, buscar, cuadrícula de imágenes, copiar/compartir enlace.
 
 ### 12.4) Autoria y ramas
 
 - **RF-K15–K19:** subir como commits en **`kevin-main`** (p. ej. `feat(kevin): RF-K15–K19 CRM seguimiento, tags, archivar, actividad, copiar historial`).
-- **RF-B10–B14:** cuando Brandon implemente, **`brandon-main`** + `feat(brandon): …` segun acuerdo del equipo.
+- **RF-B10–B14:** implementados en **`brandon-main`** con commit `315c79d` (`feat(brandon): RF-B10 a RF-B14 en gestion de documentos`).
 - Sincronizacion entre ramas: **11.5**.
+
+### 12.5) Integracion entre ramas (08/05/2026)
+
+- `brandon-main` ya integró `kevin-main` mediante merge, quedando una rama de prueba con ambas tandas (Kevin + Brandon).
+- Si se quiere simetría total, falta merge inverso de `brandon-main` hacia `kevin-main` o integración de ambas en `main`.
 

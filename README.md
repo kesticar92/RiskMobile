@@ -2,7 +2,17 @@
 
 **Plataforma móvil SaaS de evaluación financiera, simulación crediticia y gestión de asesoría para asesores financieros independientes.**
 
-**Última actualización de este README:** **04/05/2026** — **RF-K15–K19** implementados (CRM Kevin); **RF-B10–B14** siguen backlog (Brandon). Ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§12** y `RESUMEN_ENTREGABLE.md` **§16**.
+**Última actualización de este README:** **08/05/2026** — **RF-K15–K19** (Kevin) y **RF-B10–B14** (Brandon) implementados, con integración entre ramas en `brandon-main`. Ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§12** y `RESUMEN_ENTREGABLE.md` **§16**.
+
+---
+
+## Cambios del día — 08/05/2026
+
+### Resumen (08/05/2026)
+
+- **Brandon (`brandon-main`) — RF-B10–B14 en código:** agrupación por tipo de documento, orden (más reciente/antiguo), búsqueda por nombre/tipo, vista de imágenes en cuadrícula y acciones para copiar/compartir `downloadUrl` (`share_plus`).
+- **Integración de ramas:** merge de `kevin-main` → `brandon-main` para consolidar RF-K15–K19 + RF-B10–B14 en una sola línea de prueba.
+- **Documentación:** actualización de estado en `README.md`, `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§12) y `RESUMEN_ENTREGABLE.md` (§16).
 
 ---
 
@@ -11,7 +21,7 @@
 ### Resumen (04/05/2026)
 
 - **Kevin (`kevin-main`) — RF-K15–K19 en código:** próximo seguimiento (`nextFollowUpAt`, orden y chips en CRM); etiquetas (`caseTags`, filtro en panel); archivar (`caseArchived`, “Incluir archivados”); última actividad en tarjeta (`lastStatusChangeAt` al cambiar estado); copiar historial de estados y columnas extra en TSV.
-- **Brandon:** RF-B10–B14 documentados en §12.2 — pendiente implementación.
+- **Brandon:** RF-B10–B14 documentados en §12.2 (implementados el 08/05/2026 en `brandon-main`).
 
 ---
 

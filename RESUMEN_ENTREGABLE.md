@@ -1,6 +1,6 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
-**Última actualización del documento:** **4 de mayo de 2026**. Ver **§16** (RF-K15–K19 implementados; RF-B10–B14 backlog). Ver **§15** para la iteración abril 2026 (RF-K5–K14, RF-B5–B9, ramas y merge).
+**Última actualización del documento:** **8 de mayo de 2026**. Ver **§16** (RF-K15–K19 y RF-B10–B14 implementados + integración entre ramas). Ver **§15** para la iteración abril 2026 (RF-K5–K14, RF-B5–B9, ramas y merge).
 
 Documento para exposición y referencia del equipo.
 
@@ -412,7 +412,7 @@ Tras la exposición se detectó que **no se podía avanzar bien** al declarar **
 
 ---
 
-## 16. Cuarta oleada — **04 de mayo de 2026** (Kevin implementado; Brandon backlog)
+## 16. Cuarta oleada — **04 a 08 de mayo de 2026** (Kevin y Brandon implementados)
 
 Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
 
@@ -422,8 +422,17 @@ Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
 |-----|---------|
 | RF-K15–K19 | Seguimiento programado, tags y filtro, archivar casos, línea “Última actividad” + `lastStatusChangeAt`, copiar historial de estados y TSV ampliado. Archivos: `financial_profile_model.dart`, `firestore_service.dart`, `client_detail_screen.dart`, `advisor_dashboard_screen.dart`. |
 
-### 16.2 Pendiente — **`brandon-main`** — RF-B10 a RF-B14
+### 16.2 Implementado — **`brandon-main`** — RF-B10 a RF-B14
 
 | IDs | Resumen |
 |-----|---------|
-| RF-B10–B14 | Agrupar por tipo; orden; búsqueda por nombre; cuadrícula de imágenes; copiar/compartir enlace. Sin commits en esta fecha en el alcance Kevin. |
+| RF-B10–B14 | Agrupar por tipo; orden por fecha; búsqueda por nombre/tipo; cuadrícula para imágenes; copiar/compartir enlace (`downloadUrl`) con `share_plus`. Commit `315c79d` en `brandon-main` sobre `documents_screen.dart`, `pubspec.yaml` y `pubspec.lock`. |
+
+### 16.3 Integración entre ramas (estado actual)
+
+- En `brandon-main` ya quedó integrada la línea de Kevin mediante merge de `kevin-main`, por lo que esta rama contiene conjuntamente:
+  - RF-K15–K19 (CRM asesor y trazabilidad), y
+  - RF-B10–B14 (gestión documental cliente).
+- Validación rápida de integración:
+  - `kevin-main..brandon-main` muestra únicamente el commit propio de Brandon (`315c79d`).
+  - `brandon-main..kevin-main` muestra únicamente el commit propio de Kevin (`183ce18`) antes de integrar en Kevin la línea de Brandon.
