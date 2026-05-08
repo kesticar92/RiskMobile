@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/user_preferences.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/glass_card.dart';
 
@@ -54,8 +55,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _biometricLogin() async {
     final auth = ref.read(authServiceProvider);
+    final prefs = await UserPreferences.instance();
+    if (!prefs.biometricEnabled) {
+      _showSnack('Activa la biometría en Configuración después de iniciar sesión');
+      return;
+    }
     if (auth.currentUser == null) {
-      _showSnack('Primero inicia sesión para activar la biometría');
+      _showSnack('Inicia sesión con correo y contraseña; la próxima vez podrás usar biometría al abrir la app');
       return;
     }
     final ok = await auth.authenticateWithBiometrics();
@@ -67,6 +73,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       } else {
         context.go(AppRoutes.clientHome);
       }
+    } else if (mounted) {
+      _showSnack('Biometría no reconocida. Intenta de nuevo o usa tu contraseña');
     }
   }
 

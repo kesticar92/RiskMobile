@@ -8,26 +8,58 @@ class FinancialObligation {
   final double monthlyPayment;
   final double? balance;
 
+  /// RF12: nombre del extracto bancario adjunto como soporte de la obligación.
+  final String? bankExtractFileName;
+
+  /// Identidad estable en la UI (entrevista); no se persiste en Firestore.
+  final String? clientRowId;
+
   const FinancialObligation({
     required this.entity,
     required this.creditType,
     required this.monthlyPayment,
     this.balance,
+    this.bankExtractFileName,
+    this.clientRowId,
   });
 
-  Map<String, dynamic> toMap() => {
-    'entity': entity,
-    'creditType': creditType,
-    'monthlyPayment': monthlyPayment,
-    'balance': balance,
-  };
+  /// Solo campos que van a Firestore (sin `clientRowId`).
+  Map<String, dynamic> toFirestoreMap() => {
+        'entity': entity,
+        'creditType': creditType,
+        'monthlyPayment': monthlyPayment,
+        'balance': balance,
+        'bankExtractFileName': bankExtractFileName,
+      };
 
-  factory FinancialObligation.fromMap(Map<String, dynamic> map) => FinancialObligation(
-    entity: map['entity'] ?? '',
-    creditType: map['creditType'] ?? '',
-    monthlyPayment: (map['monthlyPayment'] ?? 0).toDouble(),
-    balance: map['balance']?.toDouble(),
-  );
+  Map<String, dynamic> toMap() => toFirestoreMap();
+
+  FinancialObligation copyWith({
+    String? entity,
+    String? creditType,
+    double? monthlyPayment,
+    double? balance,
+    String? bankExtractFileName,
+    String? clientRowId,
+  }) =>
+      FinancialObligation(
+        entity: entity ?? this.entity,
+        creditType: creditType ?? this.creditType,
+        monthlyPayment: monthlyPayment ?? this.monthlyPayment,
+        balance: balance ?? this.balance,
+        bankExtractFileName: bankExtractFileName ?? this.bankExtractFileName,
+        clientRowId: clientRowId ?? this.clientRowId,
+      );
+
+  factory FinancialObligation.fromMap(Map<String, dynamic> map) =>
+      FinancialObligation(
+        entity: map['entity'] ?? '',
+        creditType: map['creditType'] ?? '',
+        monthlyPayment: (map['monthlyPayment'] ?? 0).toDouble(),
+        balance: map['balance']?.toDouble(),
+        bankExtractFileName: map['bankExtractFileName'] as String?,
+        clientRowId: null,
+      );
 }
 
 class FinancialProfileModel {
@@ -85,6 +117,25 @@ class FinancialProfileModel {
   // Monto estimado viable (calculado por el simulador)
   double? estimatedViableAmount;
 
+  /// Nota interna del asesor (solo CRM). No se envía desde flujos cliente en toFirestore.
+  final String? advisorInternalNote;
+  final DateTime? advisorNoteUpdatedAt;
+
+  /// Prioridad alta marcada por el asesor (solo vía CRM). No va en toFirestore del cliente.
+  final bool casePriority;
+
+  /// RF-K15: fecha en que el asesor debe revisar el caso de nuevo.
+  final DateTime? nextFollowUpAt;
+
+  /// RF-K16: etiquetas cortas (CRM), máx. 8 en persistencia.
+  final List<String> caseTags;
+
+  /// RF-K17: ocultar de la bandeja principal del CRM.
+  final bool caseArchived;
+
+  /// RF-K18: último cambio explícito de estado (no va en toFirestore del cliente).
+  final DateTime? lastStatusChangeAt;
+
   FinancialProfileModel({
     required this.id,
     required this.clientId,
@@ -101,7 +152,28 @@ class FinancialProfileModel {
     required this.createdAt,
     required this.updatedAt,
     this.estimatedViableAmount,
-  });
+    this.advisorInternalNote,
+    this.advisorNoteUpdatedAt,
+    this.casePriority = false,
+    this.nextFollowUpAt,
+    List<String>? caseTags,
+    this.caseArchived = false,
+    this.lastStatusChangeAt,
+  }) : caseTags = caseTags ?? const [];
+
+  static List<String> _parseCaseTags(dynamic raw) {
+    if (raw is! List) return [];
+    final seen = <String>{};
+    final out = <String>[];
+    for (final e in raw) {
+      final t = e.toString().trim().toLowerCase();
+      if (t.isEmpty || seen.contains(t)) continue;
+      seen.add(t);
+      out.add(t);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
 
   factory FinancialProfileModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -123,6 +195,15 @@ class FinancialProfileModel {
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       estimatedViableAmount: d['estimatedViableAmount']?.toDouble(),
+      advisorInternalNote: d['advisorInternalNote'] as String?,
+      advisorNoteUpdatedAt:
+          (d['advisorNoteUpdatedAt'] as Timestamp?)?.toDate(),
+      casePriority: d['casePriority'] == true,
+      nextFollowUpAt: (d['nextFollowUpAt'] as Timestamp?)?.toDate(),
+      caseTags: _parseCaseTags(d['caseTags']),
+      caseArchived: d['caseArchived'] == true,
+      lastStatusChangeAt:
+          (d['lastStatusChangeAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -134,7 +215,7 @@ class FinancialProfileModel {
       'contractType': contractType,
       'seniorityMonths': seniorityMonths,
       'monthlyIncome': monthlyIncome,
-      'obligations': obligations.map((o) => o.toMap()).toList(),
+      'obligations': obligations.map((o) => o.toFirestoreMap()).toList(),
       'totalMonthlyPayments': totalMonthlyPayments,
       'debtLevel': debtLevel,
       'availableCapacity': availableCapacity,

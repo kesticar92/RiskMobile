@@ -72,10 +72,19 @@ class AuthService {
     return getUserData(credential.user!.uid);
   }
 
+  Future<bool> get canUseBiometrics async {
+    try {
+      final supported = await _localAuth.isDeviceSupported();
+      final canCheck = await _localAuth.canCheckBiometrics;
+      return supported && canCheck;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> authenticateWithBiometrics() async {
     try {
-      final isAvailable = await _localAuth.canCheckBiometrics;
-      if (!isAvailable) return false;
+      if (!await canUseBiometrics) return false;
 
       return await _localAuth.authenticate(
         localizedReason: 'Autentícate para acceder a RiskMobile',

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../shared/widgets/gradient_button.dart';
@@ -41,8 +44,23 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
   final _totalPages = 3;
 
+  void _onFormFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _seniorityCtrl.addListener(_onFormFieldChanged);
+    _incomeCtrl.addListener(_onFormFieldChanged);
+    _desiredAmountCtrl.addListener(_onFormFieldChanged);
+  }
+
   @override
   void dispose() {
+    _seniorityCtrl.removeListener(_onFormFieldChanged);
+    _incomeCtrl.removeListener(_onFormFieldChanged);
+    _desiredAmountCtrl.removeListener(_onFormFieldChanged);
     _pageController.dispose();
     _seniorityCtrl.dispose();
     _incomeCtrl.dispose();
@@ -68,7 +86,7 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
         curve: Curves.easeInOutCubic,
       );
     } else {
-      context.pop();
+      popOrGo(context, AppRoutes.clientHome);
     }
   }
 
@@ -97,7 +115,15 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
 
       final savedId = await fs.saveFinancialProfile(profile);
       if (!mounted) return;
-      context.go(AppRoutes.calculator, extra: savedId);
+      // Quitar la entrevista de la pila y abrir calculadora con el caso guardado.
+      // Así el "atrás" vuelve al home (o a la calculadora vacía si vino de ahí).
+      if (context.canPop()) {
+        context.pop();
+        if (!mounted) return;
+        context.pushReplacement(AppRoutes.calculator, extra: savedId);
+      } else {
+        context.go(AppRoutes.calculator, extra: savedId);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -261,12 +287,18 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
       case 1:
         if (!_hasObligations) return true;
         if (_obligations.isEmpty) return false;
+        // Datos mínimos por obligación. Los extractos por deuda (RF12) se exigen
+        // en la pantalla de documentos, no aquí — exigirlos bloqueaba "Continuar"
+        // con 3+ deudas y rompía la demo.
         return _obligations.every((o) =>
             o.entity.trim().length >= 2 &&
             o.creditType.trim().isNotEmpty &&
             o.monthlyPayment > 0);
       case 2:
-        return desiredAmount >= 0 && _selectedCreditType != null;
+        if (_selectedCreditType == null) return false;
+        if (desiredAmount < 0) return false;
+        if (desiredAmount > 0 && desiredAmount < 1000) return false;
+        return true;
       default:
         return false;
     }
@@ -311,6 +343,7 @@ class _ActivityPage extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => onActivitySelected(activity),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -356,8 +389,11 @@ class _ActivityPage extends StatelessWidget {
                         const Icon(Icons.check_circle, color: Colors.white, size: 20),
                     ],
                   ),
-                ),
-              ).animate().fadeIn(delay: Duration(milliseconds: e.key * 60)).slideX(begin: 0.2),
+                )
+                    .animate()
+                    .fadeIn(delay: Duration(milliseconds: e.key * 60))
+                    .slideX(begin: 0.2),
+              ),
             );
           }),
           const SizedBox(height: 20),
@@ -458,6 +494,20 @@ class _ObligationsPageState extends State<_ObligationsPage> {
     _localList.addAll(widget.obligations);
   }
 
+  @override
+  void didUpdateWidget(covariant _ObligationsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.hasObligations) {
+      if (_localList.isNotEmpty) {
+        _localList.clear();
+      }
+      return;
+    }
+    // No resincronizar por solo `length`: podía pisar la lista local y provocar
+    // pérdida de filas o índices inconsistentes. La lista la gobierna este State
+    // vía `onObligationsChanged` desde el padre.
+  }
+
   void _addObligation() {
     showModalBottomSheet(
       context: context,
@@ -466,7 +516,7 @@ class _ObligationsPageState extends State<_ObligationsPage> {
       builder: (_) => _AddObligationSheet(
         onAdd: (ob) {
           setState(() => _localList.add(ob));
-          widget.onObligationsChanged(_localList);
+          widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
         },
       ),
     );
@@ -528,13 +578,67 @@ class _ObligationsPageState extends State<_ObligationsPage> {
                 ),
               )
             else
-              ..._localList.asMap().entries.map((e) => _ObligationTile(
-                    obligation: e.value,
-                    onRemove: () {
-                      setState(() => _localList.removeAt(e.key));
-                      widget.onObligationsChanged(_localList);
-                    },
-                  )),
+              ...List.generate(_localList.length, (i) {
+                final ob = _localList[i];
+                return _ObligationTile(
+                  key: ValueKey(
+                    ob.clientRowId ??
+                        '${ob.entity}_${ob.creditType}_${ob.monthlyPayment}_$i',
+                  ),
+                  obligation: ob,
+                  onRemove: () {
+                    setState(() {
+                      if (ob.clientRowId != null) {
+                        _localList.removeWhere(
+                          (x) => x.clientRowId == ob.clientRowId,
+                        );
+                      } else {
+                        final j = _localList.indexWhere(
+                          (x) =>
+                              x.entity == ob.entity &&
+                              x.creditType == ob.creditType &&
+                              x.monthlyPayment == ob.monthlyPayment &&
+                              x.balance == ob.balance &&
+                              x.bankExtractFileName == ob.bankExtractFileName,
+                        );
+                        if (j >= 0) {
+                          _localList.removeAt(j);
+                        }
+                      }
+                      widget.onObligationsChanged(
+                        List<FinancialObligation>.from(_localList),
+                      );
+                    });
+                  },
+                  onUpdate: (updated) {
+                    setState(() {
+                      if (ob.clientRowId != null) {
+                        final j = _localList.indexWhere(
+                          (x) => x.clientRowId == ob.clientRowId,
+                        );
+                        if (j >= 0) {
+                          _localList[j] = updated;
+                        }
+                      } else {
+                        final j = _localList.indexWhere(
+                          (x) =>
+                              x.entity == ob.entity &&
+                              x.creditType == ob.creditType &&
+                              x.monthlyPayment == ob.monthlyPayment &&
+                              x.balance == ob.balance &&
+                              x.bankExtractFileName == ob.bankExtractFileName,
+                        );
+                        if (j >= 0) {
+                          _localList[j] = updated;
+                        }
+                      }
+                      widget.onObligationsChanged(
+                        List<FinancialObligation>.from(_localList),
+                      );
+                    });
+                  },
+                );
+              }),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _addObligation,
@@ -557,11 +661,29 @@ class _ObligationsPageState extends State<_ObligationsPage> {
 class _ObligationTile extends StatelessWidget {
   final FinancialObligation obligation;
   final VoidCallback onRemove;
+  final ValueChanged<FinancialObligation> onUpdate;
 
-  const _ObligationTile({required this.obligation, required this.onRemove});
+  const _ObligationTile({
+    super.key,
+    required this.obligation,
+    required this.onRemove,
+    required this.onUpdate,
+  });
+
+  Future<void> _pickExtract(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    final name = result.files.single.name;
+    if (name.isEmpty) return;
+    onUpdate(obligation.copyWith(bankExtractFileName: name));
+  }
 
   @override
   Widget build(BuildContext context) {
+    final extract = obligation.bankExtractFileName;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -570,32 +692,71 @@ class _ObligationTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.purpleTranslucent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.credit_card_outlined,
-                color: AppColors.secondaryPurple, size: 18),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.purpleTranslucent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.credit_card_outlined,
+                    color: AppColors.secondaryPurple, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(obligation.entity,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(
+                      '${obligation.creditType} • \$${obligation.monthlyPayment.toStringAsFixed(0)}/mes',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close,
+                    size: 18, color: AppColors.textLight),
+                onPressed: onRemove,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(obligation.entity,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                Text('${obligation.creditType} • \$${obligation.monthlyPayment.toStringAsFixed(0)}/mes',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18, color: AppColors.textLight),
-            onPressed: onRemove,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                extract != null
+                    ? Icons.attach_file
+                    : Icons.warning_amber_rounded,
+                size: 16,
+                color: extract != null ? AppColors.riskLow : AppColors.riskMedium,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  extract != null
+                      ? 'Extracto: $extract'
+                      : 'Adjunta extracto bancario (PDF o imagen)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _pickExtract(context),
+                icon: const Icon(Icons.upload_file_outlined, size: 16),
+                label: Text(extract == null ? 'Adjuntar' : 'Cambiar'),
+              ),
+            ],
           ),
         ],
       ),
@@ -709,6 +870,7 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
                 creditType: _type,
                 monthlyPayment: payment,
                 balance: balance,
+                clientRowId: const Uuid().v4(),
               );
               widget.onAdd(ob);
               Navigator.pop(context);
@@ -763,6 +925,15 @@ class _IntentionPage extends StatelessWidget {
                     prefixText: '\$ ',
                     prefixIcon: Icon(Icons.monetization_on_outlined),
                     labelText: 'Valor del crédito que buscas',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Puedes dejar 0 si aún no lo tienes claro. Si indicas un monto, usa al menos \$1.000 COP.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.35,
                   ),
                 ),
               ],

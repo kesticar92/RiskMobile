@@ -59,7 +59,8 @@ class RiskCalculator {
     // Fórmula de valor presente de annuity: PV = PMT * (1 - (1+r)^-n) / r
     final double pv =
         availableCapacity * (1 - pow(1 + rate, -termMonths)) / rate;
-    return pv;
+    if (!pv.isFinite || pv.isNaN) return 0;
+    return max(0, pv);
   }
 
   /// Calcula la cuota mensual dado un monto de crédito
@@ -72,7 +73,10 @@ class RiskCalculator {
     final double rate = monthlyRate / 100;
     // PMT = PV * r * (1+r)^n / ((1+r)^n - 1)
     final double powVal = pow(1 + rate, termMonths).toDouble();
-    return principal * rate * powVal / (powVal - 1);
+    if (powVal == 1) return 0;
+    final pmt = principal * rate * powVal / (powVal - 1);
+    if (!pmt.isFinite || pmt.isNaN) return 0;
+    return max(0, pmt);
   }
 
   /// Nivel de endeudamiento en porcentaje

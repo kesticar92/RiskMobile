@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/financial_profile_model.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/widgets/glass_card.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/risk_score_widget.dart';
@@ -23,6 +28,18 @@ class ClientDetailScreen extends ConsumerStatefulWidget {
 class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   FinancialProfileModel? _profile;
   bool _isLoading = true;
+  bool _updatingStatus = false;
+  bool _savingAdvisorNote = false;
+  bool _priorityBusy = false;
+  bool _followUpBusy = false;
+  bool _tagsBusy = false;
+  bool _archivedBusy = false;
+  bool _copyHistoryBusy = false;
+  String? _advisorName;
+  UserModel? _clientUser;
+  final _advisorNoteCtrl = TextEditingController();
+  final _newTagCtrl = TextEditingController();
+  List<String> _tagsDraft = [];
 
   @override
   void initState() {
@@ -30,26 +47,305 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _advisorNoteCtrl.dispose();
+    _newTagCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    final auth = ref.read(authServiceProvider);
+    final advisorUid = auth.currentUser?.uid;
+    if (advisorUid != null && _advisorName == null) {
+      final advisor = await auth.getUserData(advisorUid);
+      _advisorName = advisor?.name;
+    }
     final p = await ref
         .read(firestoreServiceProvider)
         .getFinancialProfile(widget.profileId);
+    UserModel? clientUser;
+    if (p != null) {
+      clientUser = await auth.getUserData(p.clientId);
+    }
+    if (!mounted) return;
     setState(() {
       _profile = p;
       _isLoading = false;
+      _clientUser = clientUser;
+    });
+    if (p != null) {
+      _advisorNoteCtrl.text = p.advisorInternalNote ?? '';
+      _tagsDraft = List<String>.from(p.caseTags);
+    }
+  }
+
+  Future<void> _setCasePriority(bool value) async {
+    setState(() => _priorityBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCasePriority(
+            caseId: widget.profileId,
+            priority: value,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              value ? 'Caso marcado como prioridad.' : 'Prioridad retirada.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _priorityBusy = false);
+    }
+  }
+
+  Future<void> _openWhatsAppContact() async {
+    final phone = _clientUser?.phone?.trim();
+    if (phone == null || phone.isEmpty) return;
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return;
+    final uri = Uri.parse('https://wa.me/$digits');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _saveAdvisorNote() async {
+    setState(() => _savingAdvisorNote = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseAdvisorNote(
+            caseId: widget.profileId,
+            note: _advisorNoteCtrl.text.trim(),
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nota interna guardada.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingAdvisorNote = false);
+    }
+  }
+
+  String _clipboardCaseSummary(FinancialProfileModel p) {
+    final b = StringBuffer()
+      ..writeln('RiskMobile — resumen de caso')
+      ..writeln('ID: ${p.id}')
+      ..writeln('Cliente: ${p.clientName}')
+      ..writeln('Estado: ${p.caseStatus}')
+      ..writeln('Actividad: ${p.economicActivity}')
+      ..writeln('Ingresos: ${AppFormatters.currency(p.monthlyIncome)}')
+      ..writeln('Cuotas: ${AppFormatters.currency(p.totalMonthlyPayments)}')
+      ..writeln('Capacidad disp.: ${AppFormatters.currency(p.availableCapacity)}')
+      ..writeln('Monto deseado: ${AppFormatters.currency(p.desiredAmount)}')
+      ..writeln('Score: ${p.riskScore} (${p.riskLabel})')
+      ..writeln('Actualizado: ${AppFormatters.dateTime(p.updatedAt)}');
+    if (p.nextFollowUpAt != null) {
+      b.writeln(
+        'Próximo seguimiento: ${AppFormatters.date(p.nextFollowUpAt!)}',
+      );
+    }
+    if (p.caseTags.isNotEmpty) {
+      b.writeln('Etiquetas: ${p.caseTags.join(', ')}');
+    }
+    if (p.caseArchived) {
+      b.writeln('Archivado: sí');
+    }
+    return b.toString();
+  }
+
+  Future<void> _pickFollowUpDate() async {
+    final p = _profile;
+    if (p == null) return;
+    final initial = p.nextFollowUpAt ?? DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (d == null || !mounted) return;
+    setState(() => _followUpBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseNextFollowUp(
+            caseId: widget.profileId,
+            at: DateTime(d.year, d.month, d.day, 12),
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Próximo seguimiento guardado.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _followUpBusy = false);
+    }
+  }
+
+  Future<void> _clearFollowUpDate() async {
+    setState(() => _followUpBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseNextFollowUp(
+            caseId: widget.profileId,
+            at: null,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seguimiento eliminado.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _followUpBusy = false);
+    }
+  }
+
+  Future<void> _saveTags() async {
+    setState(() => _tagsBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseTags(
+            caseId: widget.profileId,
+            tags: _tagsDraft,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Etiquetas guardadas.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _tagsBusy = false);
+    }
+  }
+
+  void _addDraftTag() {
+    final t = _newTagCtrl.text.trim().toLowerCase();
+    if (t.isEmpty) return;
+    if (_tagsDraft.length >= 8) return;
+    if (_tagsDraft.contains(t)) {
+      _newTagCtrl.clear();
+      return;
+    }
+    setState(() {
+      _tagsDraft = [..._tagsDraft, t];
+      _newTagCtrl.clear();
     });
   }
 
+  void _removeDraftTag(String tag) {
+    setState(() => _tagsDraft = _tagsDraft.where((x) => x != tag).toList());
+  }
+
+  Future<void> _setArchived(bool value) async {
+    setState(() => _archivedBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseArchived(
+            caseId: widget.profileId,
+            archived: value,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              value ? 'Caso archivado en el CRM.' : 'Caso visible de nuevo en la lista.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _archivedBusy = false);
+    }
+  }
+
+  Future<void> _copyStatusHistory() async {
+    final p = _profile;
+    if (p == null) return;
+    setState(() => _copyHistoryBusy = true);
+    try {
+      final text = await ref
+          .read(firestoreServiceProvider)
+          .getCaseStatusHistoryPlainText(
+            caseId: widget.profileId,
+            clientName: p.clientName,
+          );
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Historial de estados copiado.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _copyHistoryBusy = false);
+    }
+  }
+
+  String _tagLabel(String stored) {
+    if (stored.isEmpty) return stored;
+    return stored[0].toUpperCase() + stored.substring(1);
+  }
+
   Future<void> _updateStatus(String status) async {
-    await ref
-        .read(firestoreServiceProvider)
-        .updateCaseStatus(widget.profileId, status);
-    await _load();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Estado actualizado: $status')),
+    final current = _profile;
+    if (current == null || current.caseStatus == status) return;
+    setState(() => _updatingStatus = true);
+    try {
+      final fs = ref.read(firestoreServiceProvider);
+      final advisorUid = ref.read(authServiceProvider).currentUser?.uid ?? 'unknown';
+      await fs.updateCaseStatus(widget.profileId, status);
+      await fs.appendCaseStatusHistory(
+        caseId: widget.profileId,
+        fromStatus: current.caseStatus,
+        toStatus: status,
+        changedByUid: advisorUid,
+        changedByName: _advisorName,
+      );
+      await fs.createNotification(
+        userId: current.clientId,
+        title: 'Actualización de tu caso',
+        message:
+            'Tu caso cambió de "${current.caseStatus}" a "$status".',
+        caseId: current.id,
+        type: 'case_status_changed',
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Estado actualizado: $status')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingStatus = false);
+    }
+  }
+
+  Future<void> _updateDocumentStatus({
+    required String documentId,
+    required String clientId,
+    required String caseId,
+    required String fileName,
+    required String newStatus,
+  }) async {
+    final fs = ref.read(firestoreServiceProvider);
+    await fs.updateDocumentStatus(documentId, newStatus);
+    if (newStatus == AppConstants.documentRejectedNeedsResend) {
+      await fs.createNotification(
+        userId: clientId,
+        title: 'Documento requiere reenvio',
+        message: 'Tu documento "$fileName" fue rechazado. Sube uno nuevo.',
+        caseId: caseId,
+        documentId: documentId,
+        type: 'document_rejected',
       );
     }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Documento actualizado: $newStatus')),
+    );
   }
 
   @override
@@ -107,12 +403,86 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         ],
                       ),
                     ).animate().fadeIn(duration: 400.ms),
+                    const SizedBox(height: 12),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: ref
+                          .read(firestoreServiceProvider)
+                          .streamCaseDocuments(p.id),
+                      builder: (context, snap) {
+                        final pending = (snap.data?.docs ?? []).where((d) {
+                          final m = d.data() as Map<String, dynamic>;
+                          return (m['status'] as String?) ==
+                              AppConstants.documentPendingReview;
+                        }).length;
+                        return GlassCard(
+                          child: Row(
+                            children: [
+                              Icon(Icons.pending_actions_outlined,
+                                  color: AppColors.riskMedium, size: 22),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Documentos pendientes de revisión: $pending',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ).animate().fadeIn(delay: 40.ms),
+                    if (_clientUser?.phone != null &&
+                        _clientUser!.phone!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _openWhatsAppContact,
+                        icon: const Icon(Icons.chat, size: 20),
+                        label: const Text('Contactar por WhatsApp'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    GlassCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.assignment_outlined,
+                                  color: AppColors.primaryBlue, size: 22),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Datos de la entrevista',
+                                style:
+                                    Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _InfoRow(
+                              'Actividad económica', p.economicActivity),
+                          if (p.contractType != null &&
+                              p.contractType!.isNotEmpty)
+                            _InfoRow('Tipo de contrato', p.contractType!),
+                          _InfoRow('Antigüedad laboral',
+                              '${p.seniorityMonths} meses'),
+                          if (p.desiredCreditType != null)
+                            _InfoRow(
+                              'Producto de interés', p.desiredCreditType!),
+                          _InfoRow(
+                            'Obligaciones declaradas',
+                            '${p.obligations.length}',
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 80.ms),
                     const SizedBox(height: 16),
                     // Financial summary
                     Text('Perfil financiero',
                         style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 12),
-                    _InfoRow('Actividad económica', p.economicActivity),
                     _InfoRow('Ingresos mensuales',
                         AppFormatters.currency(p.monthlyIncome)),
                     _InfoRow('Total cuotas actuales',
@@ -122,8 +492,6 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         isHighlight: true),
                     _InfoRow('Monto deseado',
                         AppFormatters.currency(p.desiredAmount)),
-                    if (p.desiredCreditType != null)
-                      _InfoRow('Tipo de crédito', p.desiredCreditType!),
                     const SizedBox(height: 16),
                     // Obligations
                     if (p.obligations.isNotEmpty) ...[
@@ -155,6 +523,18 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                                           style: TextStyle(
                                               fontSize: 12,
                                               color: AppColors.textSecondary)),
+                                      if (o.bankExtractFileName != null &&
+                                          o.bankExtractFileName!.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            'Extracto: ${o.bankExtractFileName}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.primaryBlueDark,
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -171,8 +551,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                       const SizedBox(height: 16),
                     ],
                     // Status update
-                    Text('Estado del caso',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Row(
+                      children: [
+                        Text('Estado del caso',
+                            style: Theme.of(context).textTheme.titleLarge),
+                        if (_updatingStatus) ...[
+                          const SizedBox(width: 10),
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(4),
@@ -191,10 +583,402 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                             .map((s) =>
                                 DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
-                        onChanged: (v) {
-                          if (v != null) _updateStatus(v);
-                        },
+                        onChanged: _updatingStatus
+                            ? null
+                            : (v) {
+                                if (v != null) _updateStatus(v);
+                              },
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Prioridad alta en cartera'),
+                      subtitle: const Text(
+                        'Destaca el caso en el panel del asesor y permite filtrarlo.',
+                      ),
+                      value: p.casePriority,
+                      onChanged: (_updatingStatus || _priorityBusy)
+                          ? null
+                          : (v) => _setCasePriority(v),
+                    ),
+                    const SizedBox(height: 8),
+                    if (p.caseArchived)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.riskMedium.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.riskMedium.withOpacity(0.35),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2_outlined,
+                                color: AppColors.riskMedium, size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Caso archivado: oculto en la lista principal del CRM hasta que actives “Incluir archivados”.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Text('Próximo seguimiento',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Te recordará revisar el caso en la fecha elegida (indicadores en el panel).',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _followUpBusy ? null : _pickFollowUpDate,
+                            icon: _followUpBusy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.event_outlined, size: 18),
+                            label: Text(
+                              p.nextFollowUpAt != null
+                                  ? 'Cambiar (${AppFormatters.date(p.nextFollowUpAt!)})'
+                                  : 'Elegir fecha',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (p.nextFollowUpAt != null)
+                          IconButton(
+                            tooltip: 'Quitar fecha',
+                            onPressed: _followUpBusy ? null : _clearFollowUpDate,
+                            icon: const Icon(Icons.clear),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Etiquetas del caso',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Hasta 8 etiquetas para filtrar en el CRM (ej. vip, reestructuración).',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ..._tagsDraft.map(
+                          (t) => InputChip(
+                            label: Text(_tagLabel(t)),
+                            onDeleted: _tagsBusy ? null : () => _removeDraftTag(t),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _newTagCtrl,
+                            enabled: !_tagsBusy && _tagsDraft.length < 8,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              hintText: 'Nueva etiqueta',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (_) => _addDraftTag(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: (_tagsBusy || _tagsDraft.length >= 8)
+                              ? null
+                              : _addDraftTag,
+                          child: const Text('Añadir'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _tagsBusy ? null : _saveTags,
+                        icon: _tagsBusy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save_outlined, size: 18),
+                        label: Text(_tagsBusy ? 'Guardando…' : 'Guardar etiquetas'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Archivar caso en el CRM'),
+                      subtitle: const Text(
+                        'Oculta el caso de la lista principal; puedes volver a mostrarlo cuando quieras.',
+                      ),
+                      value: p.caseArchived,
+                      onChanged: (_archivedBusy || _updatingStatus)
+                          ? null
+                          : (v) => _setArchived(v),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text('Historial de estados',
+                              style: Theme.of(context).textTheme.titleLarge),
+                        ),
+                        TextButton.icon(
+                          onPressed: _copyHistoryBusy ? null : _copyStatusHistory,
+                          icon: _copyHistoryBusy
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.copy_all_outlined, size: 18),
+                          label: Text(
+                            _copyHistoryBusy ? 'Copiando…' : 'Copiar historial',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: ref
+                          .read(firestoreServiceProvider)
+                          .streamCaseStatusHistory(p.id),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        final history = snapshot.data?.docs ?? [];
+                        if (history.isEmpty) {
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Text(
+                              'Aún no hay cambios de estado registrados.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          );
+                        }
+                        return Column(
+                          children: history.map((h) {
+                            final data = h.data() as Map<String, dynamic>;
+                            final from = (data['fromStatus'] as String?) ?? 'Sin estado';
+                            final to = (data['toStatus'] as String?) ?? 'Sin estado';
+                            final changedBy =
+                                (data['changedByName'] as String?)?.trim();
+                            final changedAt = (data['changedAt'] as Timestamp?)?.toDate();
+                            return Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$from  →  $to',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (changedBy != null && changedBy.isNotEmpty)
+                                    Text(
+                                      'Por: $changedBy',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  if (changedAt != null)
+                                    Text(
+                                      AppFormatters.date(changedAt),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Nota interna (CRM)',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Visible solo para asesores. No se muestra al cliente.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _advisorNoteCtrl,
+                      maxLines: 4,
+                      minLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: 'Seguimiento, acuerdos, recordatorios…',
+                        border: OutlineInputBorder(),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    if (p.advisorNoteUpdatedAt != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Última edición: ${AppFormatters.dateTime(p.advisorNoteUpdatedAt!)}',
+                        style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _savingAdvisorNote ? null : _saveAdvisorNote,
+                        icon: _savingAdvisorNote
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save_outlined, size: 18),
+                        label: Text(_savingAdvisorNote ? 'Guardando…' : 'Guardar nota'),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Documentos del caso',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 10),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: ref
+                          .read(firestoreServiceProvider)
+                          .streamCaseDocuments(p.id),
+                      builder: (context, snapshot) {
+                        final docs = snapshot.data?.docs ?? [];
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        if (docs.isEmpty) {
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Text(
+                              'Este caso no tiene documentos cargados.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          );
+                        }
+                        return Column(
+                          children: docs.map((d) {
+                            final data = d.data() as Map<String, dynamic>;
+                            final status = (data['status'] as String?) ??
+                                AppConstants.documentPendingReview;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (data['fileName'] as String?) ?? 'Documento',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    (data['documentType'] as String?) ??
+                                        'Soporte general',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  DropdownButtonFormField<String>(
+                                    value: AppConstants.documentStates.contains(status)
+                                        ? status
+                                        : AppConstants.documentPendingReview,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: AppConstants.documentStates
+                                        .map((s) => DropdownMenuItem(
+                                              value: s,
+                                              child: Text(s),
+                                            ))
+                                        .toList(),
+                                    onChanged: (v) {
+                                      if (v != null) {
+                                        _updateDocumentStatus(
+                                          documentId: d.id,
+                                          clientId: p.clientId,
+                                          caseId: p.id,
+                                          fileName:
+                                              (data['fileName'] as String?) ??
+                                                  'Documento',
+                                          newStatus: v,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                     // Actions
@@ -280,8 +1064,22 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                     style: Theme.of(context).textTheme.headlineSmall),
                 Text(AppFormatters.date(p.createdAt),
                     style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'Caso: ${p.id}',
+                  style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Copiar resumen del caso',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: _clipboardCaseSummary(p)));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Resumen copiado al portapapeles.')),
+              );
+            },
+            icon: const Icon(Icons.copy_all_outlined),
           ),
         ],
       ),

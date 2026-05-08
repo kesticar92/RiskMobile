@@ -1,5 +1,7 @@
 # Cómo ejecutar y probar RiskMobile
 
+*Guía vigente; alineada con la documentación del proyecto al **18 de abril de 2026**.*
+
 ## 1. Requisitos previos
 
 - **Flutter SDK** instalado (3.0 o superior). Verifica con:

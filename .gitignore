@@ -59,3 +59,9 @@ GoogleService-Info.plist
 
 # Flutter plugins (regenerated on pub get)
 .flutter-plugins
+
+# Local helper scripts (no versionar)
+/tools/
+
+# Cursor (configuración local; no subir a GitHub)
+.cursor/

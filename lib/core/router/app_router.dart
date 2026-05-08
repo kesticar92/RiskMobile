@@ -16,6 +16,7 @@ import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/auth/presentation/screens/client_home_screen.dart';
+import '../../features/history/presentation/screens/evaluations_history_screen.dart';
 
 class AppRoutes {
   static const splash = '/';
@@ -33,6 +34,7 @@ class AppRoutes {
   static const chat = '/chat';
   static const payments = '/payments';
   static const settings = '/settings';
+  static const evaluationsHistory = '/evaluations-history';
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -158,6 +160,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settings,
         pageBuilder: (context, state) => CustomTransitionPage(
           child: const SettingsScreen(),
+          transitionsBuilder: _slideTransition,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.evaluationsHistory,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          child: const EvaluationsHistoryScreen(),
           transitionsBuilder: _slideTransition,
         ),
       ),

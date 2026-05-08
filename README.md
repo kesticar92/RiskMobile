@@ -2,6 +2,194 @@
 
 **Plataforma móvil SaaS de evaluación financiera, simulación crediticia y gestión de asesoría para asesores financieros independientes.**
 
+**Última actualización de este README:** **08/05/2026** — **RF-K15–K19** (Kevin) y **RF-B10–B14** (Brandon) implementados, con integración entre ramas en `brandon-main`. Ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§12** y `RESUMEN_ENTREGABLE.md` **§16**.
+
+---
+
+## Cambios del día — 08/05/2026
+
+### Resumen (08/05/2026)
+
+- **Brandon (`brandon-main`) — RF-B10–B14 en código:** agrupación por tipo de documento, orden (más reciente/antiguo), búsqueda por nombre/tipo, vista de imágenes en cuadrícula y acciones para copiar/compartir `downloadUrl` (`share_plus`).
+- **Integración de ramas:** merge de `kevin-main` → `brandon-main` para consolidar RF-K15–K19 + RF-B10–B14 en una sola línea de prueba.
+- **Documentación:** actualización de estado en `README.md`, `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§12) y `RESUMEN_ENTREGABLE.md` (§16).
+
+---
+
+## Cambios del día — 04/05/2026
+
+### Resumen (04/05/2026)
+
+- **Kevin (`kevin-main`) — RF-K15–K19 en código:** próximo seguimiento (`nextFollowUpAt`, orden y chips en CRM); etiquetas (`caseTags`, filtro en panel); archivar (`caseArchived`, “Incluir archivados”); última actividad en tarjeta (`lastStatusChangeAt` al cambiar estado); copiar historial de estados y columnas extra en TSV.
+- **Brandon:** RF-B10–B14 documentados en §12.2 (implementados el 08/05/2026 en `brandon-main`).
+
+---
+
+## Cambios del día — 18/04/2026
+
+### Resumen (18/04/2026)
+
+- **Kevin (`kevin-main`):** RF-K5–K9 (nota interna, búsqueda por ID, orden CRM, copiar resumen, chip estancamiento); RF-K10–K14 (prioridad, filtro prioridad, snippet nota en tarjeta, documentos pendientes de revisión, export TSV, WhatsApp si hay teléfono).
+- **Brandon (`brandon-main`):** RF-B5–B9 (checklist soportes, compresión imagen, banner reenvío documento, progreso extractos, abrir enlace en historial; `package:image`).
+- **Git:** commits de bloque Kevin en `kevin-main`; commit `feat(brandon)` en `brandon-main`; merge `brandon-main` → `kevin-main` para código alineado; `.cursor/` en `.gitignore`.
+- **Documentación:** `RESUMEN_PARA_EXPOSICION_RAMOS.md` §11–11.5; `RESUMEN_ENTREGABLE.md` §15.
+
+### Rutas útiles para demo
+
+1. Asesor: CRM, detalle de cliente (nota, prioridad, documentos pendientes, WhatsApp, copiar resumen).
+2. Cliente: documentos (checklist, banner, extractos), historial (abrir URL).
+
+---
+
+## Cambios del día — 16/04/2026
+
+Esta sección permite identificar rápido lo modificado hoy.
+
+### Modificado hoy (16/04/2026)
+
+- **Subida de documentos (cliente):**
+  - Soporte de subida por `bytes` (web) y por `path` (móvil/desktop).
+  - Estado por archivo: pendiente, subiendo, completado, error.
+  - Reintento por archivo y reintento masivo de fallidos.
+  - Previsualización de adjuntos (imagen + metadato PDF).
+  - Validación básica de calidad de imagen (tamaño y resolución mínima).
+- **Historial documental por caso (cliente):**
+  - Consulta de documentos por caso desde historial de evaluaciones.
+- **Gestión de estado de caso (asesor):**
+  - Trazabilidad del cambio de estado en subcolección `caseStatusHistory`.
+  - Notificación al cliente cuando cambia el estado del caso.
+  - Visualización del historial de cambios de estado en detalle del cliente.
+- **CRM asesor (filtros avanzados):**
+  - Filtro por rango de monto (mínimo/máximo).
+  - Filtro por fecha (últimos 7/30/90 días).
+  - Filtro multiestado con selección múltiple.
+  - Acción "Limpiar todo" para reset de filtros avanzados.
+- **Chat asesor-cliente (plantillas rápidas):**
+  - Botón de plantillas en el input del chat.
+  - Inserción de plantilla seleccionada en caja de texto editable.
+  - Validación contra límite máximo de caracteres.
+- **Home cliente:**
+  - Badge de notificaciones pendientes.
+
+### Ruta funcional de lo trabajado hoy
+
+1. **Cliente > Mis documentos (`/documents`)**
+   - Adjunta archivos por cámara, galería o archivo.
+   - El sistema valida formato, tamaño y calidad mínima (imágenes).
+   - Cada archivo queda con estado (`pendiente`, `subiendo`, `completado`, `error`).
+   - Si hay error, permite reintento individual o reintento masivo.
+2. **Cliente > Historial de evaluaciones (`/evaluations-history`)**
+   - En cada caso se puede abrir "Ver documentos del caso".
+   - Se listan documentos cargados con tipo y estado.
+3. **Asesor > Detalle de cliente (`/client-detail`)**
+   - Al cambiar el estado del caso, se registra trazabilidad en historial.
+   - Se genera notificación al cliente por cambio de estado.
+   - El asesor ve el historial de cambios en la misma pantalla.
+4. **Cliente > Home (`/client-home`)**
+   - Visualiza badge con conteo de notificaciones no leídas.
+5. **Asesor > CRM (`/advisor-dashboard`)**
+   - Usa filtros avanzados por monto, fecha y multiestado para encontrar casos.
+6. **Chat asesor-cliente (`/chat`)**
+   - Inserta plantillas rápidas de mensaje desde modal para respuestas frecuentes.
+
+### Detalle técnico por archivo (qué se cambió)
+
+- `lib/core/services/storage_service.dart`
+  - `uploadCaseDocument(...)` ahora soporta subida por `localPath` y `fileBytes`.
+  - Soporte real para web usando `putData(...)`.
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+  - Estados por archivo, reintento individual/masivo, previsualización y validación de calidad.
+- `lib/core/services/firestore_service.dart`
+  - Nuevos streams/métodos: historial de estado de casos, conteo de notificaciones no leídas y documentos por caso/usuario.
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+  - Bottom sheet para ver documentos asociados al caso seleccionado.
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+  - Registro de trazabilidad de estado + creación de notificación al cliente.
+  - Bloque visual de historial de cambios de estado.
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+  - Badge dinámico de notificaciones no leídas.
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+  - Filtros avanzados (monto mínimo/máximo, últimos 7/30/90 días, multiestado, limpiar todo).
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+  - Botón y modal de plantillas rápidas; inserción en input con validación de longitud.
+- `lib/core/constants/app_constants.dart`
+  - Catálogo inicial `advisorChatTemplates`.
+- `RESUMEN_PARA_EXPOSICION_RAMOS.md`
+  - Se agregaron requerimientos nuevos propuestos para Kevin y Brandon.
+
+### Archivos creados hoy (16/04/2026)
+
+- No se crearon archivos nuevos en esta iteración; solo se modificaron archivos existentes.
+
+### Archivos clave tocados hoy
+
+- `lib/core/services/storage_service.dart`
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+- `lib/core/services/firestore_service.dart`
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+- `lib/core/constants/app_constants.dart`
+- `RESUMEN_PARA_EXPOSICION_RAMOS.md`
+
+---
+
+## Cronología y estado de requerimientos
+
+Esta sección consolida el avance histórico por requerimiento, con la mejor fecha disponible en documentación del proyecto.
+
+### Requerimientos realizados (con fecha de trabajo)
+
+| Requerimiento | Estado | Fecha de trabajo | Evidencia breve |
+|---|---|---|---|
+| RF01 Registro de usuarios | Realizado | Sesión inicial (fecha no registrada) | Registro en Firebase Auth + perfil en Firestore. |
+| RF02 Login | Realizado | Sesión inicial (fecha no registrada) | Inicio de sesión por correo/contraseña. |
+| RF03 Biometría | Realizado | Entrega abril 2026 | Activación y validación biométrica en flujo de acceso. |
+| RF05 Entrevista Paso 1 | Realizado | Sesión previa (fecha no registrada) | Actividad, contrato, antigüedad e ingresos validados. |
+| RF07 Entrevista Paso 3 | Realizado | Sesión previa (fecha no registrada) | Monto deseado y tipo de crédito con validaciones. |
+| RF08 Carga por cámara | Realizado | 22/03/2026 + 16/04/2026 | Carga por cámara y mejoras de robustez/reintento. |
+| RF09 Carga por archivo | Realizado | 22/03/2026 + 16/04/2026 | Selector de archivo PDF/imagen y validaciones. |
+| RF10 Obligaciones financieras | Realizado | Sesión previa (fecha no registrada) | Registro dinámico de obligaciones. |
+| RF12 Extracto por obligación | Realizado | Entrega abril 2026 | Asociación de extractos por obligación. |
+| RF13 Endeudamiento | Realizado | Sesión previa (fecha no registrada) | Cálculo de deuda y capacidad disponible. |
+| RF14 Fórmula capacidad 40% | Realizado | Entrega abril 2026 | Visualización explícita de fórmula y valores. |
+| RF15 Score RiskMobile | Realizado | Sesión previa (fecha no registrada) | Cálculo de score con variables ponderadas. |
+| RF17 Simulador dinámico | Realizado | Sesión previa (fecha no registrada) | Simulación con sliders y cálculo en tiempo real. |
+| RF21 Monto deseado | Realizado | Entrega abril 2026 | Regla de 0 válido y mínimo cuando aplica. |
+| RF22 Deseado vs viable | Realizado | Entrega abril 2026 | Barras comparativas en perfil financiero. |
+| RF23 CRM asesor | Realizado | 22/03/2026 | Panel con métricas, búsqueda y filtros base. |
+| RF24 Perfil completo para asesor | Realizado | Entrega abril 2026 | Bloque de datos de entrevista en detalle cliente. |
+| RF25 Cambio estado del caso | Realizado | 22/03/2026 + 16/04/2026 | Actualización con feedback y trazabilidad histórica. |
+| RF26 Chat asesor-cliente | Realizado | 22/03/2026 + 16/04/2026 | Chat con límite de longitud y plantillas rápidas. |
+| RF33 Preferencias de notificación | Realizado | Entrega abril 2026 | Switches de notificación persistidos. |
+| RF34 Preferencias biometría | Realizado | Entrega abril 2026 | Configuración biométrica persistida. |
+| RF35 Storage seguro documentos | Realizado | 22/03/2026 + 16/04/2026 | Subida a Storage por usuario/caso + metadata. |
+| RF36 Recuperar contraseña | Realizado | Sesión inicial (fecha no registrada) | Pantalla y flujo de restablecimiento. |
+| RF37 Historial evaluaciones | Realizado | Sesión previa + 16/04/2026 | Historial y consulta documental por caso. |
+| RF38 Validación documental asesor | Realizado | Sesión previa (fecha no registrada) | Estados de revisión documental y notificación al cliente. |
+
+### Requerimientos pendientes / por cerrar
+
+| Requerimiento | Estado | Próximo paso sugerido |
+|---|---|---|
+| RF04 Roles y permisos finos por pantalla | Parcial | Revisión de autorizaciones por ruta y acciones críticas. |
+| RF06 Solicitud/almacenamiento de actividad económica | Parcial | Auditoría de campos y consistencia entre entrevista y detalle. |
+| RF11 Alta de múltiples obligaciones por formulario dinámico | Parcial | Pruebas de borde y edición/eliminación avanzada. |
+| RF16 Clasificación de riesgo completa | Parcial | Validar reglas de color/texto para todos los rangos extremos. |
+| RF18 Slider de plazo con presets | Parcial | QA cruzado por cada línea de crédito y límites. |
+| RF19 Selector tipo de crédito (6 opciones) | Parcial | Revisar consistencia entre entrevista, simulador y reportes. |
+| RF20 Fórmula de cuota francesa y validaciones límite | Parcial | Pruebas con tasas/plazos extremos y redondeos. |
+| RF27 Búsqueda + filtro CRM (optimización) | Parcial | Mover filtros avanzados a query server-side progresiva. |
+| RF28 Registro de comisiones | Parcial | Completar validaciones de negocio y evidencias en demo. |
+| RF29 Panel financiero asesor | Parcial | Verificar totales con casos reales y estados cerrados. |
+| RF30 Utilidad neta e historial consolidado | Parcial | Incorporar pruebas de conciliación de cifras. |
+| RF31 Estadísticas del asesor | Parcial | Refinar métricas por periodos y estados operativos. |
+| RF32 Cierre de sesión en todos los puntos requeridos | Parcial | Validación completa de UX y retorno seguro a login. |
+
+> Nota: "Parcial" significa que existe implementación funcional, pero se recomienda cierre formal con pruebas de aceptación y checklist de demo.
+
 ---
 
 ## Descripción del Proyecto

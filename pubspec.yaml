@@ -34,7 +34,9 @@ dependencies:
   uuid: ^4.5.1
   shared_preferences: ^2.5.2
   
+  image: ^4.5.0
   url_launcher: ^6.3.1
+  share_plus: ^10.1.2
   
   cupertino_icons: ^1.0.8
 

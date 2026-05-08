@@ -1,8 +1,16 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image/image.dart' as img;
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
@@ -10,6 +18,7 @@ import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/services/storage_service.dart';
+import '../../../../shared/models/financial_profile_model.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/glass_card.dart';
 
@@ -24,7 +33,25 @@ class DocumentsScreen extends ConsumerStatefulWidget {
 
 class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   static const _allowedExt = {'pdf', 'jpg', 'jpeg', 'png'};
+  static const int _minImageBytes = 20 * 1024; // 20 KB
+  static const int _minImageWidth = 600;
+  static const int _minImageHeight = 600;
   static const _uuid = Uuid();
+  static const _documentTypes = [
+    'Extracto bancario',
+    'Certificado laboral',
+    'RUT / Camara de comercio',
+    'Resolucion de pension',
+    'Otro soporte',
+  ];
+
+  /// RF-B5: tipos mínimos para barra de checklist (excluye "Otro soporte").
+  static const _checklistTypes = [
+    'Extracto bancario',
+    'Certificado laboral',
+    'RUT / Camara de comercio',
+    'Resolucion de pension',
+  ];
 
   final List<_DocItem> _documents = [];
   final _picker = ImagePicker();
@@ -33,6 +60,18 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   bool _resolvingCase = true;
   bool _uploading = false;
   double _uploadProgress = 0;
+  bool _requiresBankStatement = false;
+  int _requiredExtractCount = 0;
+  String _selectedDocumentType = _documentTypes.first;
+  String _documentsSearch = '';
+  bool _sortNewestFirst = true;
+  bool _imageGridMode = true;
+  int _currentUploadIndex = 0;
+  int _currentUploadTotal = 0;
+  DateTime? _uploadStartedAt;
+
+  bool get _hasRetryableErrors =>
+      _documents.any((d) => d.status == _DocUploadStatus.error);
 
   @override
   void initState() {
@@ -60,14 +99,23 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       }
       return;
     }
-    final id =
-        await ref.read(firestoreServiceProvider).getLatestCaseIdForClient(uid);
+    final fs = ref.read(firestoreServiceProvider);
+    final id = await fs.getLatestCaseIdForClient(uid);
+    FinancialProfileModel? profile;
+    if (id != null) {
+      profile = await fs.getFinancialProfile(id);
+    }
     if (!mounted) return;
     setState(() {
       _resolvedCaseFolder = id ?? 'pending';
       _resolvingCase = false;
+      _requiresBankStatement = (profile?.obligations.isNotEmpty ?? false);
+      _requiredExtractCount = profile?.obligations.length ?? 0;
     });
   }
+
+  int get _attachedExtractCount =>
+      _documents.where((d) => d.documentType == 'Extracto bancario').length;
 
   bool _isAllowedPath(String pathOrName) {
     final parts = pathOrName.split('.');
@@ -87,16 +135,33 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     );
     if (img == null || !mounted) return;
     final path = img.path;
-    if (!_isAllowedPath(path)) {
+    final name = img.name.isNotEmpty
+        ? img.name
+        : 'Foto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    if (!_isAllowedPath(path) && !_isAllowedPath(name)) {
       _showErr('Formato no permitido.');
       return;
     }
-    setState(() => _documents.add(_DocItem(
-          id: _uuid.v4(),
-          name: 'Foto_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          type: 'image',
-          path: path,
-        )));
+    Uint8List? bytes;
+    if (img.path.isEmpty) {
+      bytes = await img.readAsBytes();
+    }
+    final item = _DocItem(
+      id: _uuid.v4(),
+      name: name,
+      type: _typeFromName(name),
+      path: path,
+      bytes: bytes,
+      documentType: _selectedDocumentType,
+    );
+    final validation = await _validateItemQuality(item);
+    if (!validation.ok) {
+      _showErr(validation.message ?? 'Archivo inválido.');
+      return;
+    }
+    await _optimizeImageItem(item);
+    if (!mounted) return;
+    setState(() => _documents.add(item));
   }
 
   Future<void> _pickFromGallery() async {
@@ -111,38 +176,173 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _showErr('Solo JPG o PNG desde galeria.');
       return;
     }
-    setState(() => _documents.add(_DocItem(
-          id: _uuid.v4(),
-          name: name.isNotEmpty ? name : 'imagen.jpg',
-          type: _typeFromName(name.isNotEmpty ? name : path),
-          path: path,
-        )));
+    Uint8List? bytes;
+    if (img.path.isEmpty) {
+      bytes = await img.readAsBytes();
+    }
+    final item = _DocItem(
+      id: _uuid.v4(),
+      name: name.isNotEmpty ? name : 'imagen.jpg',
+      type: _typeFromName(name.isNotEmpty ? name : path),
+      path: path,
+      bytes: bytes,
+      documentType: _selectedDocumentType,
+    );
+    final validation = await _validateItemQuality(item);
+    if (!validation.ok) {
+      _showErr(validation.message ?? 'Archivo inválido.');
+      return;
+    }
+    await _optimizeImageItem(item);
+    if (!mounted) return;
+    setState(() => _documents.add(item));
   }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
+      withData: true,
     );
-    if (result == null || result.files.single.path == null || !mounted) return;
+    if (result == null || !mounted) return;
     final f = result.files.single;
-    final path = f.path!;
+    final path = f.path ?? '';
     if (!_isAllowedPath(f.name)) {
       _showErr('Formato no permitido (PDF, JPG, PNG, JPEG).');
       return;
     }
-    setState(() => _documents.add(_DocItem(
-          id: _uuid.v4(),
-          name: f.name,
-          type: _typeFromName(f.name),
-          path: path,
-        )));
+    if ((f.path == null || f.path!.isEmpty) && (f.bytes == null || f.bytes!.isEmpty)) {
+      _showErr('No se pudo leer el archivo seleccionado.');
+      return;
+    }
+    final item = _DocItem(
+      id: _uuid.v4(),
+      name: f.name,
+      type: _typeFromName(f.name),
+      path: path,
+      bytes: f.bytes,
+      documentType: _selectedDocumentType,
+    );
+    final validation = await _validateItemQuality(item);
+    if (!validation.ok) {
+      _showErr(validation.message ?? 'Archivo inválido.');
+      return;
+    }
+    await _optimizeImageItem(item);
+    if (!mounted) return;
+    setState(() => _documents.add(item));
   }
 
   void _showErr(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
+  }
+
+  Future<_DocValidationResult> _validateItemQuality(_DocItem item) async {
+    final size = await _getItemSize(item);
+    if (size == null || size <= 0) {
+      return const _DocValidationResult(
+        ok: false,
+        message: 'No se pudo leer el tamaño del archivo.',
+      );
+    }
+    if (size > StorageService.maxFileBytes) {
+      return const _DocValidationResult(
+        ok: false,
+        message: 'El archivo supera 15 MB.',
+      );
+    }
+    if (item.type == 'image') {
+      if (size < _minImageBytes) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'La imagen es muy liviana; intenta una foto más nítida.',
+        );
+      }
+      final imageBytes = await _readItemBytes(item);
+      if (imageBytes == null || imageBytes.isEmpty) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'No se pudo validar la imagen seleccionada.',
+        );
+      }
+      final dimensions = await _decodeImageDimensions(imageBytes);
+      if (dimensions == null) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'No se pudo procesar la imagen.',
+        );
+      }
+      if (dimensions.$1 < _minImageWidth || dimensions.$2 < _minImageHeight) {
+        return const _DocValidationResult(
+          ok: false,
+          message: 'La imagen es muy pequeña (mínimo 600x600).',
+        );
+      }
+    }
+    return const _DocValidationResult(ok: true);
+  }
+
+  Future<int?> _getItemSize(_DocItem item) async {
+    if (item.bytes != null && item.bytes!.isNotEmpty) {
+      return item.bytes!.lengthInBytes;
+    }
+    if (item.path.isEmpty) return null;
+    try {
+      if (kIsWeb) return null;
+      final file = File(item.path);
+      if (!file.existsSync()) return null;
+      return await file.length();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _readItemBytes(_DocItem item) async {
+    if (item.bytes != null && item.bytes!.isNotEmpty) return item.bytes;
+    if (item.path.isEmpty) return null;
+    try {
+      return await XFile(item.path).readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<(int, int)?> _decodeImageDimensions(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      return (frame.image.width, frame.image.height);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// RF-B6: reduce peso de JPEG/PNG grandes antes de subir.
+  Future<void> _optimizeImageItem(_DocItem item) async {
+    if (item.type != 'image') return;
+    final raw = await _readItemBytes(item);
+    if (raw == null || raw.lengthInBytes < 350 * 1024) return;
+    try {
+      final decoded = img.decodeImage(raw);
+      if (decoded == null) return;
+      var out = decoded;
+      if (out.width > 1600) {
+        out = img.copyResize(
+          out,
+          width: 1600,
+          interpolation: img.Interpolation.linear,
+        );
+      }
+      final outBytes =
+          Uint8List.fromList(img.encodeJpg(out, quality: 82));
+      if (outBytes.lengthInBytes >= raw.lengthInBytes) return;
+      item.bytes = outBytes;
+      item.path = '';
+      final base = item.name.replaceAll(RegExp(r'\.[^.]+$'), '');
+      item.name = '${base}_opt.jpg';
+    } catch (_) {}
   }
 
   Future<void> _saveDocuments() async {
@@ -156,47 +356,111 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       return;
     }
     if (_documents.isEmpty) return;
+    if (_requiresBankStatement &&
+        _attachedExtractCount < _requiredExtractCount) {
+      _showErr(
+        'Debes adjuntar minimo $_requiredExtractCount extracto(s) bancario(s) por tus obligaciones declaradas.',
+      );
+      return;
+    }
 
     setState(() {
       _uploading = true;
       _uploadProgress = 0;
+      _currentUploadIndex = 0;
+      _currentUploadTotal = _documents.length;
+      _uploadStartedAt = DateTime.now();
     });
 
     final storage = ref.read(storageServiceProvider);
-    final total = _documents.length;
 
+    var uploadedCount = 0;
+    final candidates = _documents
+        .where(
+          (d) =>
+              d.status == _DocUploadStatus.pending ||
+              d.status == _DocUploadStatus.error,
+        )
+        .toList();
+    final uploadCount = candidates.length;
+    if (uploadCount == 0) {
+      if (mounted) _showErr('No hay documentos pendientes o fallidos para subir.');
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+        });
+      }
+      return;
+    }
     try {
       for (var i = 0; i < _documents.length; i++) {
         final doc = _documents[i];
-        await storage.uploadCaseDocument(
-          localPath: doc.path,
-          originalFileName: doc.name,
-          userId: uid,
-          caseFolder: _resolvedCaseFolder!,
-          onProgress: (p) {
-            if (mounted) {
-              setState(() => _uploadProgress = (i + p) / total);
-            }
-          },
-        );
-        if (mounted) setState(() => _uploadProgress = (i + 1) / total);
+        if (doc.status != _DocUploadStatus.pending &&
+            doc.status != _DocUploadStatus.error) {
+          continue;
+        }
+        if (mounted) {
+          setState(() {
+            _currentUploadIndex = uploadedCount + 1;
+            doc.status = _DocUploadStatus.uploading;
+            doc.errorMessage = null;
+          });
+        }
+        try {
+          await storage.uploadCaseDocument(
+            localPath: doc.path.isNotEmpty ? doc.path : null,
+            fileBytes: doc.bytes,
+            originalFileName: doc.name,
+            userId: uid,
+            caseFolder: _resolvedCaseFolder!,
+            documentType: doc.documentType,
+            onProgress: (p) {
+              if (mounted) {
+                setState(() =>
+                    _uploadProgress = (uploadedCount + p) / uploadCount);
+              }
+            },
+          );
+          uploadedCount++;
+          if (mounted) {
+            setState(() {
+              doc.status = _DocUploadStatus.completed;
+              _uploadProgress = uploadedCount / uploadCount;
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              doc.status = _DocUploadStatus.error;
+              doc.errorMessage = e.toString();
+            });
+          }
+        }
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Documentos subidos correctamente a la nube.'),
-        ),
-      );
-      popOrGo(context, AppRoutes.clientHome);
-    } catch (e) {
-      if (mounted) {
-        _showErr('Error al subir: ${e.toString()}');
+      final failed = _documents
+          .where((d) => d.status == _DocUploadStatus.error)
+          .length;
+      if (failed == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Documentos subidos correctamente a la nube.'),
+          ),
+        );
+        popOrGo(context, AppRoutes.clientHome);
+      } else {
+        _showErr(
+          'Se subieron $uploadedCount archivo(s). $failed fallaron, puedes reintentarlos.',
+        );
       }
     } finally {
       if (mounted) {
         setState(() {
           _uploading = false;
           _uploadProgress = 0;
+          _currentUploadIndex = 0;
+          _currentUploadTotal = 0;
+          _uploadStartedAt = null;
         });
       }
     }
@@ -204,6 +468,176 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
   void _removeById(String id) {
     setState(() => _documents.removeWhere((d) => d.id == id));
+  }
+
+  Future<void> _retryOne(_DocItem doc) async {
+    if (_uploading) return;
+    final uid = ref.read(authServiceProvider).currentUser?.uid;
+    if (uid == null || _resolvedCaseFolder == null) return;
+    setState(() {
+      _uploading = true;
+      _uploadProgress = 0;
+      _currentUploadIndex = 1;
+      _currentUploadTotal = 1;
+      _uploadStartedAt = DateTime.now();
+      doc.status = _DocUploadStatus.uploading;
+      doc.errorMessage = null;
+    });
+    final storage = ref.read(storageServiceProvider);
+    try {
+      await storage.uploadCaseDocument(
+        localPath: doc.path.isNotEmpty ? doc.path : null,
+        fileBytes: doc.bytes,
+        originalFileName: doc.name,
+        userId: uid,
+        caseFolder: _resolvedCaseFolder!,
+        documentType: doc.documentType,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = p);
+        },
+      );
+      if (!mounted) return;
+      setState(() => doc.status = _DocUploadStatus.completed);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Archivo "${doc.name}" subido.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          doc.status = _DocUploadStatus.error;
+          doc.errorMessage = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _uploadProgress = 0;
+          _currentUploadIndex = 0;
+          _currentUploadTotal = 0;
+          _uploadStartedAt = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openPreview(_DocItem doc) async {
+    if (doc.type == 'image') {
+      final bytes = await _readItemBytes(doc);
+      if (bytes == null || bytes.isEmpty) {
+        _showErr('No se pudo abrir la previsualización.');
+        return;
+      }
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppBar(
+                automaticallyImplyLeading: false,
+                title: Text(doc.name, overflow: TextOverflow.ellipsis),
+                actions: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: InteractiveViewer(
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Previsualización PDF'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(doc.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            const Text(
+              'El archivo PDF está listo para subir. En esta versión se muestra metadato previo al envío.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _estimateRemaining() {
+    final started = _uploadStartedAt;
+    if (started == null || _uploadProgress <= 0) return '--';
+    final elapsedMs = DateTime.now().difference(started).inMilliseconds;
+    if (elapsedMs <= 0) return '--';
+    final totalEstimateMs = (elapsedMs / _uploadProgress).round();
+    final remainingMs = (totalEstimateMs - elapsedMs).clamp(0, 99999999);
+    final secs = (remainingMs / 1000).round();
+    if (secs < 60) return '${secs}s';
+    final min = secs ~/ 60;
+    final sec = secs % 60;
+    return '${min}m ${sec}s';
+  }
+
+  bool _isImageDocument(_StoredDocument doc) {
+    final mime = doc.mimeType.toLowerCase();
+    if (mime.startsWith('image/')) return true;
+    final name = doc.fileName.toLowerCase();
+    return name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp');
+  }
+
+  List<_StoredDocument> _extractStoredDocs(QuerySnapshot snapshot) {
+    return snapshot.docs.map((raw) {
+      final map = raw.data() as Map<String, dynamic>;
+      final createdAt = map['createdAt'];
+      return _StoredDocument(
+        id: raw.id,
+        fileName: (map['fileName'] as String?) ?? 'documento',
+        documentType: (map['documentType'] as String?) ?? 'Sin tipo',
+        downloadUrl: (map['downloadUrl'] as String?) ?? '',
+        mimeType: (map['mimeType'] as String?) ?? '',
+        createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
+      );
+    }).toList();
+  }
+
+  void _copyDocumentLink(String url) {
+    if (url.trim().isEmpty) {
+      _showErr('Este documento no tiene URL de descarga.');
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: url));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Enlace copiado al portapapeles.')),
+    );
+  }
+
+  Future<void> _shareDocumentLink(String url) async {
+    if (url.trim().isEmpty) {
+      _showErr('Este documento no tiene URL de descarga.');
+      return;
+    }
+    await Share.share(url, subject: 'Enlace de documento');
   }
 
   @override
@@ -239,14 +673,68 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                 ],
               ),
             ),
+            Builder(
+              builder: (context) {
+                final uid = ref.read(authServiceProvider).currentUser?.uid;
+                if (uid == null) return const SizedBox.shrink();
+                return StreamBuilder<bool>(
+                  stream: ref
+                      .read(firestoreServiceProvider)
+                      .streamHasUnreadDocumentRejected(uid),
+                  builder: (context, snap) {
+                    if (snap.data != true) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                      child: Material(
+                        color: AppColors.riskHigh.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: AppColors.riskHigh),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Tienes un documento marcado para reenvío. '
+                                  'Revisa notificaciones y sube un archivo nuevo.',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.riskHigh,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
             if (_uploading) ...[
               const SizedBox(height: 8),
               LinearProgressIndicator(value: _uploadProgress.clamp(0.0, 1.0)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                child: Text(
-                  'Subiendo... ${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _currentUploadTotal > 0
+                          ? 'Subiendo $_currentUploadIndex/$_currentUploadTotal ... ${(_uploadProgress * 100).toStringAsFixed(0)}%'
+                          : 'Subiendo... ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                      style:
+                          TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    if (_uploadStartedAt != null && _uploadProgress > 0)
+                      Text(
+                        'Tiempo estimado restante: ${_estimateRemaining()}',
+                        style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -282,6 +770,259 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                         ],
                       ),
                     ).animate().fadeIn(duration: 300.ms),
+                    if (!_resolvingCase &&
+                        _resolvedCaseFolder != null &&
+                        _resolvedCaseFolder != 'pending') ...[
+                      Builder(
+                        builder: (context) {
+                          final uid =
+                              ref.read(authServiceProvider).currentUser?.uid;
+                          if (uid == null) return const SizedBox.shrink();
+                          return StreamBuilder<QuerySnapshot>(
+                            stream: ref
+                                .read(firestoreServiceProvider)
+                                .streamUserCaseDocuments(
+                                  userId: uid,
+                                  caseId: _resolvedCaseFolder!,
+                                ),
+                            builder: (context, snap) {
+                              final serverTypes = <String>{};
+                              for (final d in snap.data?.docs ?? []) {
+                                final m = d.data() as Map<String, dynamic>;
+                                final t = m['documentType'] as String?;
+                                if (t != null && t.isNotEmpty) {
+                                  serverTypes.add(t);
+                                }
+                              }
+                              for (final d in _documents) {
+                                serverTypes.add(d.documentType);
+                              }
+                              final done = _checklistTypes
+                                  .where((t) => serverTypes.contains(t))
+                                  .length;
+                              final total = _checklistTypes.length;
+                              final pct = total == 0 ? 0.0 : done / total;
+                              final storedDocs = snap.hasData
+                                  ? _extractStoredDocs(snap.data!)
+                                  : <_StoredDocument>[];
+                              final query = _documentsSearch.trim().toLowerCase();
+                              final filteredDocs = storedDocs.where((doc) {
+                                if (query.isEmpty) return true;
+                                return doc.fileName.toLowerCase().contains(query) ||
+                                    doc.documentType.toLowerCase().contains(query);
+                              }).toList();
+                              filteredDocs.sort((a, b) {
+                                final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                                final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                                return _sortNewestFirst
+                                    ? bDate.compareTo(aDate)
+                                    : aDate.compareTo(bDate);
+                              });
+                              final grouped = <String, List<_StoredDocument>>{};
+                              for (final doc in filteredDocs) {
+                                grouped.putIfAbsent(doc.documentType, () => []).add(doc);
+                              }
+                              final imageDocs = filteredDocs.where(_isImageDocument).toList();
+                              final nonImageDocs = filteredDocs.where((d) => !_isImageDocument(d)).toList();
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Checklist de soportes ($done/$total)',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: LinearProgressIndicator(
+                                      value: pct,
+                                      minHeight: 8,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    children: _checklistTypes.map((t) {
+                                      final ok = serverTypes.contains(t);
+                                      return Chip(
+                                        avatar: Icon(
+                                          ok
+                                              ? Icons.check_circle
+                                              : Icons.radio_button_unchecked,
+                                          size: 18,
+                                          color: ok
+                                              ? AppColors.riskLow
+                                              : AppColors.textLight,
+                                        ),
+                                        label: Text(
+                                          t,
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Documentos en la nube (${filteredDocs.length})',
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    decoration: const InputDecoration(
+                                      hintText: 'Buscar por nombre o tipo',
+                                      prefixIcon: Icon(Icons.search),
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    onChanged: (value) {
+                                      setState(() => _documentsSearch = value);
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      ChoiceChip(
+                                        label: const Text('Mas reciente'),
+                                        selected: _sortNewestFirst,
+                                        onSelected: (_) =>
+                                            setState(() => _sortNewestFirst = true),
+                                      ),
+                                      ChoiceChip(
+                                        label: const Text('Mas antiguo'),
+                                        selected: !_sortNewestFirst,
+                                        onSelected: (_) => setState(
+                                            () => _sortNewestFirst = false),
+                                      ),
+                                      ChoiceChip(
+                                        label: Text(_imageGridMode
+                                            ? 'Imagenes en cuadricula'
+                                            : 'Imagenes en lista'),
+                                        selected: _imageGridMode,
+                                        onSelected: (v) =>
+                                            setState(() => _imageGridMode = v),
+                                      ),
+                                    ],
+                                  ),
+                                  if (filteredDocs.isEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'No hay documentos que coincidan con el filtro.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    const SizedBox(height: 10),
+                                    ...grouped.entries.map((entry) {
+                                      final docs = entry.value;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 12),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${entry.key} (${docs.length})',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 6,
+                                              children: docs
+                                                  .map((d) => Chip(
+                                                        label: Text(
+                                                          d.fileName,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ))
+                                                  .toList(),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                    if (imageDocs.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Imagenes',
+                                        style: Theme.of(context).textTheme.titleSmall,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      if (_imageGridMode)
+                                        GridView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: imageDocs.length,
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 2,
+                                            crossAxisSpacing: 8,
+                                            mainAxisSpacing: 8,
+                                            childAspectRatio: 1.35,
+                                          ),
+                                          itemBuilder: (context, index) {
+                                            final doc = imageDocs[index];
+                                            return _StoredDocCard(
+                                              doc: doc,
+                                              onCopyLink: () =>
+                                                  _copyDocumentLink(doc.downloadUrl),
+                                              onShareLink: () =>
+                                                  _shareDocumentLink(doc.downloadUrl),
+                                            );
+                                          },
+                                        )
+                                      else
+                                        ...imageDocs.map(
+                                          (doc) => Padding(
+                                            padding: const EdgeInsets.only(bottom: 8),
+                                            child: _StoredDocCard(
+                                              doc: doc,
+                                              onCopyLink: () =>
+                                                  _copyDocumentLink(doc.downloadUrl),
+                                              onShareLink: () =>
+                                                  _shareDocumentLink(doc.downloadUrl),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                    if (nonImageDocs.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Otros archivos',
+                                        style: Theme.of(context).textTheme.titleSmall,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      ...nonImageDocs.map(
+                                        (doc) => Padding(
+                                          padding: const EdgeInsets.only(bottom: 8),
+                                          child: _StoredDocCard(
+                                            doc: doc,
+                                            onCopyLink: () =>
+                                                _copyDocumentLink(doc.downloadUrl),
+                                            onShareLink: () =>
+                                                _shareDocumentLink(doc.downloadUrl),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                  const SizedBox(height: 16),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     Text('Tipo de documentos',
                         style: Theme.of(context).textTheme.titleLarge),
@@ -313,7 +1054,80 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                           ),
                         ).animate().fadeIn(
                             delay: Duration(milliseconds: e.key * 60))),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Tipo de soporte a cargar',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _documentTypes.map((type) {
+                          final isSelected = _selectedDocumentType == type;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(type),
+                              selected: isSelected,
+                              onSelected: _uploading
+                                  ? null
+                                  : (_) => setState(
+                                      () => _selectedDocumentType = type,
+                                    ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                     const SizedBox(height: 20),
+                    if (_requiresBankStatement) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.riskMedium.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.riskMedium.withOpacity(0.25),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Extractos por obligación ($_attachedExtractCount/'
+                              '$_requiredExtractCount)',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: _requiredExtractCount == 0
+                                    ? 0
+                                    : (_attachedExtractCount /
+                                            _requiredExtractCount)
+                                        .clamp(0.0, 1.0),
+                                minHeight: 8,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Debes adjuntar un extracto bancario por cada obligación declarada en tu entrevista.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -385,11 +1199,55 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                                         style: TextStyle(
                                             fontSize: 11,
                                             color: AppColors.textLight)),
+                                    Text(
+                                      doc.documentType,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    if (doc.status == _DocUploadStatus.error)
+                                      Text(
+                                        'Error al subir. Reintenta.',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.riskHigh,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-                              Icon(Icons.check_circle,
-                                  color: AppColors.riskLow, size: 18),
+                              Icon(
+                                switch (doc.status) {
+                                  _DocUploadStatus.pending => Icons.schedule,
+                                  _DocUploadStatus.uploading => Icons.cloud_upload,
+                                  _DocUploadStatus.completed =>
+                                    Icons.check_circle,
+                                  _DocUploadStatus.error => Icons.error,
+                                },
+                                color: switch (doc.status) {
+                                  _DocUploadStatus.pending =>
+                                    AppColors.textSecondary,
+                                  _DocUploadStatus.uploading =>
+                                    AppColors.primaryBlue,
+                                  _DocUploadStatus.completed => AppColors.riskLow,
+                                  _DocUploadStatus.error => AppColors.riskHigh,
+                                },
+                                size: 18,
+                              ),
+                              IconButton(
+                                tooltip: 'Previsualizar',
+                                icon: const Icon(Icons.visibility_outlined,
+                                    size: 18, color: AppColors.primaryBlue),
+                                onPressed: _uploading ? null : () => _openPreview(doc),
+                              ),
+                              if (doc.status == _DocUploadStatus.error)
+                                IconButton(
+                                  tooltip: 'Reintentar',
+                                  icon: const Icon(Icons.refresh,
+                                      size: 18, color: AppColors.primaryBlue),
+                                  onPressed: _uploading ? null : () => _retryOne(doc),
+                                ),
                               IconButton(
                                 icon: const Icon(Icons.close,
                                     size: 16, color: AppColors.textLight),
@@ -410,6 +1268,14 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                             : _saveDocuments,
                         icon: Icons.cloud_upload_outlined,
                       ),
+                      if (_hasRetryableErrors) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _uploading ? null : _saveDocuments,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar fallidos'),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 40),
                   ],
@@ -425,16 +1291,123 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
 class _DocItem {
   final String id;
-  final String name;
+  String name;
   final String type;
-  final String path;
+  String path;
+  Uint8List? bytes;
+  final String documentType;
+  _DocUploadStatus status;
+  String? errorMessage;
 
   _DocItem({
     required this.id,
     required this.name,
     required this.type,
     required this.path,
+    this.bytes,
+    required this.documentType,
+  }) : status = _DocUploadStatus.pending;
+}
+
+enum _DocUploadStatus { pending, uploading, completed, error }
+
+class _DocValidationResult {
+  final bool ok;
+  final String? message;
+
+  const _DocValidationResult({required this.ok, this.message});
+}
+
+class _StoredDocument {
+  final String id;
+  final String fileName;
+  final String documentType;
+  final String downloadUrl;
+  final String mimeType;
+  final DateTime? createdAt;
+
+  const _StoredDocument({
+    required this.id,
+    required this.fileName,
+    required this.documentType,
+    required this.downloadUrl,
+    required this.mimeType,
+    required this.createdAt,
   });
+}
+
+class _StoredDocCard extends StatelessWidget {
+  final _StoredDocument doc;
+  final VoidCallback onCopyLink;
+  final VoidCallback onShareLink;
+
+  const _StoredDocCard({
+    required this.doc,
+    required this.onCopyLink,
+    required this.onShareLink,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final created = doc.createdAt != null
+        ? '${doc.createdAt!.year}-${doc.createdAt!.month.toString().padLeft(2, '0')}-${doc.createdAt!.day.toString().padLeft(2, '0')}'
+        : 'sin fecha';
+    final isImage = doc.mimeType.startsWith('image/');
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isImage ? Icons.image_outlined : Icons.insert_drive_file_outlined,
+                size: 18,
+                color: AppColors.primaryBlue,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  doc.fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${doc.documentType} · $created',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: onCopyLink,
+                icon: const Icon(Icons.link, size: 16),
+                label: const Text('Copiar'),
+              ),
+              const SizedBox(width: 4),
+              TextButton.icon(
+                onPressed: onShareLink,
+                icon: const Icon(Icons.share_outlined, size: 16),
+                label: const Text('Compartir'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _UploadButton extends StatelessWidget {

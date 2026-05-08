@@ -1,5 +1,7 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
+**Última actualización del documento:** **8 de mayo de 2026**. Ver **§16** (RF-K15–K19 y RF-B10–B14 implementados + integración entre ramas). Ver **§15** para la iteración abril 2026 (RF-K5–K14, RF-B5–B9, ramas y merge).
+
 Documento para exposición y referencia del equipo.
 
 ---
@@ -325,4 +327,112 @@ Pueden funcionar bien si siempre se abrieron con `push`; si en algún flujo se u
 
 ---
 
-*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17, **sesión 4 (22-mar-2026):** RF23-RF25-RF26, navegación, simulador por línea de crédito, RF08-RF09-RF35). **Checkpoint:** sección 13 — subida Brandon pendiente.*
+*Documento de seguimiento del entregable RiskMobile (sesión 1: conexión BD/auth, sesión 2: entrevista RF05-RF10-RF07, sesión 3: cálculo/score/simulador RF13-RF15-RF17, **sesión 4 (22-mar-2026):** RF23-RF25-RF26, navegación, simulador por línea de crédito, RF08-RF09-RF35; **sesión 5 (16-abr-2026):** RF-B1–B4, RF-K1–K4; **sesión 6 (18-abr-2026):** RF-K5–K14, RF-B5–B9, flujo de ramas y merge — ver §15).*
+
+---
+
+## 14. Avance sesión del **16 de abril de 2026** (jueves)
+
+En esta sesión se ejecutaron mejoras funcionales para documentos, CRM asesor, trazabilidad y chat; además se actualizó la documentación de exposición.
+
+### 14.1 Requerimientos implementados en código
+
+| Bloque | Implementación |
+|---|---|
+| **Brandon (RF-B1)** | Reintento de subida por archivo y reintento masivo de fallidos en documentos. |
+| **Brandon (RF-B2)** | Validación de calidad de imagen antes de subir (tamaño y resolución mínima). |
+| **Brandon (RF-B3)** | Previsualización de adjuntos (imagen + metadato PDF). |
+| **Brandon (RF-B4)** | Historial de documentos por caso desde historial de evaluaciones. |
+| **Kevin (RF-K1)** | Trazabilidad de cambios de estado de caso en subcolección histórica. |
+| **Kevin (RF-K4)** | Notificación al cliente cuando el asesor cambia estado del caso + badge de no leídas. |
+| **Kevin (RF-K2)** | Filtros avanzados en CRM: monto, fecha y multiestado. |
+| **Kevin (RF-K3)** | Plantillas rápidas de chat con inserción y control de longitud. |
+
+### 14.2 Flujo para mostrar en exposición
+
+1. Cliente abre `Mis documentos` y prueba subida/errores/reintento/previsualización.  
+2. Cliente abre `Historial de evaluaciones` y consulta documentos del caso.  
+3. Asesor abre `Detalle de cliente`, cambia estado y muestra historial de cambios.  
+4. Cliente vuelve a Home y muestra badge de notificaciones no leídas.  
+5. Asesor abre CRM y usa filtros avanzados.  
+6. En chat, asesor usa plantillas rápidas.
+
+### 14.3 Archivos modificados hoy
+
+- `README.md`
+- `RESUMEN_PARA_EXPOSICION_RAMOS.md`
+- `lib/core/constants/app_constants.dart`
+- `lib/core/services/firestore_service.dart`
+- `lib/core/services/storage_service.dart`
+- `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`
+- `lib/features/advisor/presentation/screens/client_detail_screen.dart`
+- `lib/features/auth/presentation/screens/client_home_screen.dart`
+- `lib/features/chat/presentation/screens/chat_screen.dart`
+- `lib/features/documents/presentation/screens/documents_screen.dart`
+- `lib/features/history/presentation/screens/evaluations_history_screen.dart`
+
+### 14.4 Archivos creados hoy
+
+- No se crearon archivos nuevos en esta sesión; se modificaron archivos existentes.
+
+---
+
+## 15. Avance sesión del **18 de abril de 2026** (sábado)
+
+Resumen de la iteración más reciente alineada con `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§11–11.5).
+
+### 15.1 Requerimientos en código
+
+| Bloque | IDs | Resumen breve |
+|--------|-----|-----------------|
+| **Kevin** | RF-K5 a RF-K9 | Nota interna asesor, búsqueda por ID de caso, orden de lista CRM, copiar resumen del caso, chip +7 d sin cambios. |
+| **Brandon** | RF-B5 a RF-B9 | Checklist de soportes, optimización JPEG previa a subida, aviso reenvío documento, progreso extractos por obligación, abrir URL en historial; dependencia `image`. |
+| **Kevin** | RF-K10 a RF-K14 | Prioridad de caso, filtro “Solo prioridad”, snippet de nota en tarjeta CRM, contador documentos pendientes de revisión, export TSV; contacto WhatsApp si hay teléfono en `users`. |
+
+### 15.2 Ramas Git y merge
+
+- **`kevin-main`:** commits propios del bloque asesor (Kevin) y `chore` de `.gitignore` (carpeta `.cursor/` no versionada).
+- **`brandon-main`:** misma base que Kevin más el commit **`feat(brandon): …`** (documentos).
+- **`kevin-main`** incorporó documentos mediante **merge** desde `brandon-main` (`Merge brandon-main: sincronizar RF-B5 a RF-B9 en linea kevin-main`) para tener el mismo código al probar la app.
+- Documentación del flujo: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §11.5** y este **§15**.
+
+### 15.3 Archivos tocados (referencia)
+
+- Asesor / CRM: `advisor_dashboard_screen.dart`, `client_detail_screen.dart`.
+- Servicios / modelo: `firestore_service.dart`, `financial_profile_model.dart`.
+- Documentos / historial: `documents_screen.dart`, `evaluations_history_screen.dart`.
+- Dependencias: `pubspec.yaml`, `pubspec.lock`.
+- Resúmenes: `RESUMEN_PARA_EXPOSICION_RAMOS.md`, `README.md`, este archivo.
+
+### 15.4 Corrección — paso 2 entrevista (obligaciones / deudas)
+
+Tras la exposición se detectó que **no se podía avanzar bien** al declarar **varias** obligaciones: el botón **Continuar** exigía **extracto bancario** en **todas** las filas antes de salir del paso 2, y los índices del listado provocaban errores al eliminar o actualizar filas.
+
+**Ajustes:** en el paso 2 solo se validan entidad, tipo y cuota; los extractos por obligación siguen siendo obligatorios en **Mis documentos** (RF12). Cada obligación nueva lleva `clientRowId` (solo UI) para listas estables; `toFirestore` no persiste ese campo.
+
+---
+
+## 16. Cuarta oleada — **04 a 08 de mayo de 2026** (Kevin y Brandon implementados)
+
+Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
+
+### 16.1 Implementado — **`kevin-main`** — RF-K15 a RF-K19
+
+| IDs | Resumen |
+|-----|---------|
+| RF-K15–K19 | Seguimiento programado, tags y filtro, archivar casos, línea “Última actividad” + `lastStatusChangeAt`, copiar historial de estados y TSV ampliado. Archivos: `financial_profile_model.dart`, `firestore_service.dart`, `client_detail_screen.dart`, `advisor_dashboard_screen.dart`. |
+
+### 16.2 Implementado — **`brandon-main`** — RF-B10 a RF-B14
+
+| IDs | Resumen |
+|-----|---------|
+| RF-B10–B14 | Agrupar por tipo; orden por fecha; búsqueda por nombre/tipo; cuadrícula para imágenes; copiar/compartir enlace (`downloadUrl`) con `share_plus`. Commit `315c79d` en `brandon-main` sobre `documents_screen.dart`, `pubspec.yaml` y `pubspec.lock`. |
+
+### 16.3 Integración entre ramas (estado actual)
+
+- En `brandon-main` ya quedó integrada la línea de Kevin mediante merge de `kevin-main`, por lo que esta rama contiene conjuntamente:
+  - RF-K15–K19 (CRM asesor y trazabilidad), y
+  - RF-B10–B14 (gestión documental cliente).
+- Validación rápida de integración:
+  - `kevin-main..brandon-main` muestra únicamente el commit propio de Brandon (`315c79d`).
+  - `brandon-main..kevin-main` muestra únicamente el commit propio de Kevin (`183ce18`) antes de integrar en Kevin la línea de Brandon.
