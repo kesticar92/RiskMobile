@@ -2,7 +2,16 @@
 
 **Plataforma móvil SaaS de evaluación financiera, simulación crediticia y gestión de asesoría para asesores financieros independientes.**
 
-**Última actualización de este README:** **18/04/2026** — iteración CRM Kevin (RF-K5–K14), documentos Brandon (RF-B5–B9), flujo de ramas `kevin-main` / `brandon-main`, merge de sincronización y documentación en `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§11.5) y `RESUMEN_ENTREGABLE.md` (§15).
+**Última actualización de este README:** **04/05/2026** — **RF-K15–K19** implementados (CRM Kevin); **RF-B10–B14** siguen backlog (Brandon). Ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§12** y `RESUMEN_ENTREGABLE.md` **§16**.
+
+---
+
+## Cambios del día — 04/05/2026
+
+### Resumen (04/05/2026)
+
+- **Kevin (`kevin-main`) — RF-K15–K19 en código:** próximo seguimiento (`nextFollowUpAt`, orden y chips en CRM); etiquetas (`caseTags`, filtro en panel); archivar (`caseArchived`, “Incluir archivados”); última actividad en tarjeta (`lastStatusChangeAt` al cambiar estado); copiar historial de estados y columnas extra en TSV.
+- **Brandon:** RF-B10–B14 documentados en §12.2 — pendiente implementación.
 
 ---
 

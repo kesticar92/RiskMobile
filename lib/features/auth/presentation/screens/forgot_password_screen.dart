@@ -36,10 +36,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       if (!mounted) return;
       setState(() { _sent = true; _isLoading = false; });
     } catch (e) {
-      if (mounted) setState(() {
-        _error = 'No pudimos enviar el correo. Verifica el email e intenta de nuevo.';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error =
+              'No pudimos enviar el correo. Verifica el email e intenta de nuevo.';
+          _isLoading = false;
+        });
+      }
     }
   }
 

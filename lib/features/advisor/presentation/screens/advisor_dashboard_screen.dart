@@ -12,7 +12,12 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/financial_profile_model.dart';
 import '../../../../shared/models/user_model.dart';
 
-enum _ClientSort { byUpdatedDesc, byNameAsc }
+enum _ClientSort { byUpdatedDesc, byNameAsc, byFollowUpAsc }
+
+String _crmTagLabel(String stored) {
+  if (stored.isEmpty) return stored;
+  return stored[0].toUpperCase() + stored.substring(1);
+}
 
 class AdvisorDashboardScreen extends ConsumerStatefulWidget {
   const AdvisorDashboardScreen({super.key});
@@ -173,6 +178,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
   int? _lastDays;
   _ClientSort _sortMode = _ClientSort.byUpdatedDesc;
   bool _filterPriorityOnly = false;
+  bool _includeArchived = false;
+  final Set<String> _selectedTags = {};
 
   @override
   void dispose() {
@@ -193,7 +200,9 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
       _lastDays != null ||
       _minAmountCtrl.text.trim().isNotEmpty ||
       _maxAmountCtrl.text.trim().isNotEmpty ||
-      _filterPriorityOnly;
+      _filterPriorityOnly ||
+      _selectedTags.isNotEmpty ||
+      _includeArchived;
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +225,11 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
         final inProgressPct =
             total > 0 ? ((inProgressCount / total) * 100).round() : 0;
         final q = _search.toLowerCase().trim();
+        final tagOptions = <String>{};
+        for (final p in allProfiles) {
+          tagOptions.addAll(p.caseTags);
+        }
+        final sortedTags = tagOptions.toList()..sort();
         final filtered = allProfiles.where((p) {
           final matchStatus = (widget.filterStatus == 'Todos' ||
                   p.caseStatus == widget.filterStatus) &&
@@ -232,12 +246,18 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
               now.difference(p.updatedAt).inDays <= _lastDays!;
           final matchPriority =
               !_filterPriorityOnly || p.casePriority;
+          final matchArchived =
+              _includeArchived || !p.caseArchived;
+          final matchTags = _selectedTags.isEmpty ||
+              p.caseTags.any((t) => _selectedTags.contains(t));
           return matchStatus &&
               matchSearch &&
               matchMinAmount &&
               matchMaxAmount &&
               matchDate &&
-              matchPriority;
+              matchPriority &&
+              matchArchived &&
+              matchTags;
         }).toList()
           ..sort((a, b) {
             switch (_sortMode) {
@@ -247,6 +267,13 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                 return a.clientName
                     .toLowerCase()
                     .compareTo(b.clientName.toLowerCase());
+              case _ClientSort.byFollowUpAsc:
+                final ad = a.nextFollowUpAt;
+                final bd = b.nextFollowUpAt;
+                if (ad == null && bd == null) return 0;
+                if (ad == null) return 1;
+                if (bd == null) return -1;
+                return ad.compareTo(bd);
             }
           });
 
@@ -312,25 +339,29 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Text('Última actualización'),
-                            selected: _sortMode == _ClientSort.byUpdatedDesc,
-                            onSelected: (_) => setState(
-                              () => _sortMode = _ClientSort.byUpdatedDesc,
-                            ),
+                        ChoiceChip(
+                          label: const Text('Última actualización'),
+                          selected: _sortMode == _ClientSort.byUpdatedDesc,
+                          onSelected: (_) => setState(
+                            () => _sortMode = _ClientSort.byUpdatedDesc,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Text('Nombre A–Z'),
-                            selected: _sortMode == _ClientSort.byNameAsc,
-                            onSelected: (_) => setState(
-                              () => _sortMode = _ClientSort.byNameAsc,
-                            ),
+                        ChoiceChip(
+                          label: const Text('Nombre A–Z'),
+                          selected: _sortMode == _ClientSort.byNameAsc,
+                          onSelected: (_) => setState(
+                            () => _sortMode = _ClientSort.byNameAsc,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Próx. seguimiento'),
+                          selected: _sortMode == _ClientSort.byFollowUpAsc,
+                          onSelected: (_) => setState(
+                            () => _sortMode = _ClientSort.byFollowUpAsc,
                           ),
                         ),
                       ],
@@ -338,7 +369,7 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: FilterChip(
+                      child:                     FilterChip(
                         label: Text(
                           'Solo prioridad (${allProfiles.where((x) => x.casePriority).length})',
                         ),
@@ -348,6 +379,45 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                       ),
                     ),
                     const SizedBox(height: 8),
+                    FilterChip(
+                      label: Text(
+                        'Incluir archivados (${allProfiles.where((x) => x.caseArchived).length})',
+                      ),
+                      selected: _includeArchived,
+                      onSelected: (v) => setState(() => _includeArchived = v),
+                    ),
+                    if (sortedTags.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Filtrar por etiqueta',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                          children: sortedTags.map((tag) {
+                          final sel = _selectedTags.contains(tag);
+                          return FilterChip(
+                            label: Text(_crmTagLabel(tag)),
+                            selected: sel,
+                            onSelected: (_) {
+                              setState(() {
+                                if (sel) {
+                                  _selectedTags.remove(tag);
+                                } else {
+                                  _selectedTags.add(tag);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -355,11 +425,11 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                             ? null
                             : () {
                                 const h =
-                                    'Cliente\tID caso\tEstado\tMonto deseado\tPrioridad\tActualizado';
+                                    'Cliente\tID caso\tEstado\tMonto deseado\tPrioridad\tSeguimiento\tEtiquetas\tArchivado\tActualizado';
                                 final rows = filtered
                                     .map(
                                       (p) =>
-                                          '${p.clientName}\t${p.id}\t${p.caseStatus}\t${p.desiredAmount}\t${p.casePriority ? "Sí" : "No"}\t${AppFormatters.dateTime(p.updatedAt)}',
+                                          '${p.clientName}\t${p.id}\t${p.caseStatus}\t${p.desiredAmount}\t${p.casePriority ? "Sí" : "No"}\t${p.nextFollowUpAt != null ? AppFormatters.date(p.nextFollowUpAt!) : ""}\t${p.caseTags.join(";")}\t${p.caseArchived ? "Sí" : "No"}\t${AppFormatters.dateTime(p.updatedAt)}',
                                     )
                                     .join('\n');
                                 Clipboard.setData(
@@ -405,6 +475,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                                       _minAmountCtrl.clear();
                                       _maxAmountCtrl.clear();
                                       _filterPriorityOnly = false;
+                                      _selectedTags.clear();
+                                      _includeArchived = false;
                                     });
                                   },
                                   child: const Text('Limpiar todo'),
@@ -612,6 +684,49 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+class _ClientFollowUpChip extends StatelessWidget {
+  final DateTime at;
+  const _ClientFollowUpChip({required this.at});
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final startToday = DateTime(today.year, today.month, today.day);
+    final startFu = DateTime(at.year, at.month, at.day);
+    late Color bg;
+    late Color fg;
+    late String label;
+    if (startFu.isBefore(startToday)) {
+      bg = AppColors.riskHigh.withOpacity(0.18);
+      fg = AppColors.riskHigh;
+      label = 'Seg. vencido';
+    } else if (startFu == startToday) {
+      bg = AppColors.riskMedium.withOpacity(0.18);
+      fg = AppColors.riskMedium;
+      label = 'Seg. hoy';
+    } else {
+      bg = AppColors.primaryBlue.withOpacity(0.1);
+      fg = AppColors.primaryBlueDark;
+      label = AppFormatters.date(at);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
 class _ClientCard extends ConsumerWidget {
   final FinancialProfileModel profile;
   final int index;
@@ -687,6 +802,11 @@ class _ClientCard extends ConsumerWidget {
                                     size: 17, color: AppColors.riskMedium),
                                 const SizedBox(width: 4),
                               ],
+                              if (profile.caseArchived) ...[
+                                Icon(Icons.inventory_2_outlined,
+                                    size: 16, color: AppColors.textLight),
+                                const SizedBox(width: 4),
+                              ],
                               Expanded(
                                 child: Text(
                                   profile.clientName,
@@ -721,6 +841,53 @@ class _ClientCard extends ConsumerWidget {
                               ),
                             ),
                           ],
+                          if (profile.caseTags.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: [
+                                ...profile.caseTags
+                                    .take(3)
+                                    .map(
+                                      (t) => Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryBlue
+                                              .withOpacity(0.08),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          _crmTagLabel(t),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.primaryBlueDark,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                if (profile.caseTags.length > 3)
+                                  Text(
+                                    '+${profile.caseTags.length - 3}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.textLight,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Última actividad · ${AppFormatters.timeAgo(profile.lastStatusChangeAt ?? profile.updatedAt)}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textLight,
+                            ),
+                          ),
                           const SizedBox(height: 6),
                           Row(
                             children: [
@@ -740,14 +907,11 @@ class _ClientCard extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                AppFormatters.timeAgo(profile.updatedAt),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: AppColors.textLight,
-                                ),
-                              ),
+                              if (profile.nextFollowUpAt != null) ...[
+                                const SizedBox(width: 6),
+                                _ClientFollowUpChip(
+                                    at: profile.nextFollowUpAt!),
+                              ],
                               if (DateTime.now()
                                       .difference(profile.updatedAt)
                                       .inDays >=
