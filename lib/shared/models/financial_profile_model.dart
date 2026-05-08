@@ -124,6 +124,18 @@ class FinancialProfileModel {
   /// Prioridad alta marcada por el asesor (solo vía CRM). No va en toFirestore del cliente.
   final bool casePriority;
 
+  /// RF-K15: fecha en que el asesor debe revisar el caso de nuevo.
+  final DateTime? nextFollowUpAt;
+
+  /// RF-K16: etiquetas cortas (CRM), máx. 8 en persistencia.
+  final List<String> caseTags;
+
+  /// RF-K17: ocultar de la bandeja principal del CRM.
+  final bool caseArchived;
+
+  /// RF-K18: último cambio explícito de estado (no va en toFirestore del cliente).
+  final DateTime? lastStatusChangeAt;
+
   FinancialProfileModel({
     required this.id,
     required this.clientId,
@@ -143,7 +155,25 @@ class FinancialProfileModel {
     this.advisorInternalNote,
     this.advisorNoteUpdatedAt,
     this.casePriority = false,
-  });
+    this.nextFollowUpAt,
+    List<String>? caseTags,
+    this.caseArchived = false,
+    this.lastStatusChangeAt,
+  }) : caseTags = caseTags ?? const [];
+
+  static List<String> _parseCaseTags(dynamic raw) {
+    if (raw is! List) return [];
+    final seen = <String>{};
+    final out = <String>[];
+    for (final e in raw) {
+      final t = e.toString().trim().toLowerCase();
+      if (t.isEmpty || seen.contains(t)) continue;
+      seen.add(t);
+      out.add(t);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
 
   factory FinancialProfileModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -169,6 +199,11 @@ class FinancialProfileModel {
       advisorNoteUpdatedAt:
           (d['advisorNoteUpdatedAt'] as Timestamp?)?.toDate(),
       casePriority: d['casePriority'] == true,
+      nextFollowUpAt: (d['nextFollowUpAt'] as Timestamp?)?.toDate(),
+      caseTags: _parseCaseTags(d['caseTags']),
+      caseArchived: d['caseArchived'] == true,
+      lastStatusChangeAt:
+          (d['lastStatusChangeAt'] as Timestamp?)?.toDate(),
     );
   }
 

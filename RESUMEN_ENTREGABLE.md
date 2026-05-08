@@ -1,6 +1,6 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
-**Última actualización del documento:** **18 de abril de 2026** (sábado). Ver **§15** para la iteración más reciente (CRM Kevin, documentos Brandon, ramas y merge).
+**Última actualización del documento:** **4 de mayo de 2026**. Ver **§16** (RF-K15–K19 implementados; RF-B10–B14 backlog). Ver **§15** para la iteración abril 2026 (RF-K5–K14, RF-B5–B9, ramas y merge).
 
 Documento para exposición y referencia del equipo.
 
@@ -409,3 +409,21 @@ Resumen de la iteración más reciente alineada con `RESUMEN_PARA_EXPOSICION_RAM
 Tras la exposición se detectó que **no se podía avanzar bien** al declarar **varias** obligaciones: el botón **Continuar** exigía **extracto bancario** en **todas** las filas antes de salir del paso 2, y los índices del listado provocaban errores al eliminar o actualizar filas.
 
 **Ajustes:** en el paso 2 solo se validan entidad, tipo y cuota; los extractos por obligación siguen siendo obligatorios en **Mis documentos** (RF12). Cada obligación nueva lleva `clientRowId` (solo UI) para listas estables; `toFirestore` no persiste ese campo.
+
+---
+
+## 16. Cuarta oleada — **04 de mayo de 2026** (Kevin implementado; Brandon backlog)
+
+Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
+
+### 16.1 Implementado — **`kevin-main`** — RF-K15 a RF-K19
+
+| IDs | Resumen |
+|-----|---------|
+| RF-K15–K19 | Seguimiento programado, tags y filtro, archivar casos, línea “Última actividad” + `lastStatusChangeAt`, copiar historial de estados y TSV ampliado. Archivos: `financial_profile_model.dart`, `firestore_service.dart`, `client_detail_screen.dart`, `advisor_dashboard_screen.dart`. |
+
+### 16.2 Pendiente — **`brandon-main`** — RF-B10 a RF-B14
+
+| IDs | Resumen |
+|-----|---------|
+| RF-B10–B14 | Agrupar por tipo; orden; búsqueda por nombre; cuadrícula de imágenes; copiar/compartir enlace. Sin commits en esta fecha en el alcance Kevin. |

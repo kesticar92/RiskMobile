@@ -11,7 +11,7 @@ plugins {
 android {
     namespace = "com.riskmobile.riskmobile_scaffold"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13113456"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

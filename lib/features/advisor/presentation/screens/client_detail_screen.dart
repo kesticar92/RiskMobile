@@ -31,9 +31,15 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   bool _updatingStatus = false;
   bool _savingAdvisorNote = false;
   bool _priorityBusy = false;
+  bool _followUpBusy = false;
+  bool _tagsBusy = false;
+  bool _archivedBusy = false;
+  bool _copyHistoryBusy = false;
   String? _advisorName;
   UserModel? _clientUser;
   final _advisorNoteCtrl = TextEditingController();
+  final _newTagCtrl = TextEditingController();
+  List<String> _tagsDraft = [];
 
   @override
   void initState() {
@@ -44,6 +50,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   @override
   void dispose() {
     _advisorNoteCtrl.dispose();
+    _newTagCtrl.dispose();
     super.dispose();
   }
 
@@ -69,6 +76,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     });
     if (p != null) {
       _advisorNoteCtrl.text = p.advisorInternalNote ?? '';
+      _tagsDraft = List<String>.from(p.caseTags);
     }
   }
 
@@ -136,7 +144,149 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       ..writeln('Monto deseado: ${AppFormatters.currency(p.desiredAmount)}')
       ..writeln('Score: ${p.riskScore} (${p.riskLabel})')
       ..writeln('Actualizado: ${AppFormatters.dateTime(p.updatedAt)}');
+    if (p.nextFollowUpAt != null) {
+      b.writeln(
+        'Próximo seguimiento: ${AppFormatters.date(p.nextFollowUpAt!)}',
+      );
+    }
+    if (p.caseTags.isNotEmpty) {
+      b.writeln('Etiquetas: ${p.caseTags.join(', ')}');
+    }
+    if (p.caseArchived) {
+      b.writeln('Archivado: sí');
+    }
     return b.toString();
+  }
+
+  Future<void> _pickFollowUpDate() async {
+    final p = _profile;
+    if (p == null) return;
+    final initial = p.nextFollowUpAt ?? DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (d == null || !mounted) return;
+    setState(() => _followUpBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseNextFollowUp(
+            caseId: widget.profileId,
+            at: DateTime(d.year, d.month, d.day, 12),
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Próximo seguimiento guardado.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _followUpBusy = false);
+    }
+  }
+
+  Future<void> _clearFollowUpDate() async {
+    setState(() => _followUpBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseNextFollowUp(
+            caseId: widget.profileId,
+            at: null,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seguimiento eliminado.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _followUpBusy = false);
+    }
+  }
+
+  Future<void> _saveTags() async {
+    setState(() => _tagsBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseTags(
+            caseId: widget.profileId,
+            tags: _tagsDraft,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Etiquetas guardadas.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _tagsBusy = false);
+    }
+  }
+
+  void _addDraftTag() {
+    final t = _newTagCtrl.text.trim().toLowerCase();
+    if (t.isEmpty) return;
+    if (_tagsDraft.length >= 8) return;
+    if (_tagsDraft.contains(t)) {
+      _newTagCtrl.clear();
+      return;
+    }
+    setState(() {
+      _tagsDraft = [..._tagsDraft, t];
+      _newTagCtrl.clear();
+    });
+  }
+
+  void _removeDraftTag(String tag) {
+    setState(() => _tagsDraft = _tagsDraft.where((x) => x != tag).toList());
+  }
+
+  Future<void> _setArchived(bool value) async {
+    setState(() => _archivedBusy = true);
+    try {
+      await ref.read(firestoreServiceProvider).updateCaseArchived(
+            caseId: widget.profileId,
+            archived: value,
+          );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              value ? 'Caso archivado en el CRM.' : 'Caso visible de nuevo en la lista.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _archivedBusy = false);
+    }
+  }
+
+  Future<void> _copyStatusHistory() async {
+    final p = _profile;
+    if (p == null) return;
+    setState(() => _copyHistoryBusy = true);
+    try {
+      final text = await ref
+          .read(firestoreServiceProvider)
+          .getCaseStatusHistoryPlainText(
+            caseId: widget.profileId,
+            clientName: p.clientName,
+          );
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Historial de estados copiado.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _copyHistoryBusy = false);
+    }
+  }
+
+  String _tagLabel(String stored) {
+    if (stored.isEmpty) return stored;
+    return stored[0].toUpperCase() + stored.substring(1);
   }
 
   Future<void> _updateStatus(String status) async {
@@ -452,9 +602,168 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                           ? null
                           : (v) => _setCasePriority(v),
                     ),
-                    const SizedBox(height: 20),
-                    Text('Historial de estados',
+                    const SizedBox(height: 8),
+                    if (p.caseArchived)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.riskMedium.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.riskMedium.withOpacity(0.35),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.inventory_2_outlined,
+                                color: AppColors.riskMedium, size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Caso archivado: oculto en la lista principal del CRM hasta que actives “Incluir archivados”.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Text('Próximo seguimiento',
                         style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Te recordará revisar el caso en la fecha elegida (indicadores en el panel).',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _followUpBusy ? null : _pickFollowUpDate,
+                            icon: _followUpBusy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.event_outlined, size: 18),
+                            label: Text(
+                              p.nextFollowUpAt != null
+                                  ? 'Cambiar (${AppFormatters.date(p.nextFollowUpAt!)})'
+                                  : 'Elegir fecha',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (p.nextFollowUpAt != null)
+                          IconButton(
+                            tooltip: 'Quitar fecha',
+                            onPressed: _followUpBusy ? null : _clearFollowUpDate,
+                            icon: const Icon(Icons.clear),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Text('Etiquetas del caso',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Hasta 8 etiquetas para filtrar en el CRM (ej. vip, reestructuración).',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ..._tagsDraft.map(
+                          (t) => InputChip(
+                            label: Text(_tagLabel(t)),
+                            onDeleted: _tagsBusy ? null : () => _removeDraftTag(t),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _newTagCtrl,
+                            enabled: !_tagsBusy && _tagsDraft.length < 8,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              hintText: 'Nueva etiqueta',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (_) => _addDraftTag(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: (_tagsBusy || _tagsDraft.length >= 8)
+                              ? null
+                              : _addDraftTag,
+                          child: const Text('Añadir'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _tagsBusy ? null : _saveTags,
+                        icon: _tagsBusy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save_outlined, size: 18),
+                        label: Text(_tagsBusy ? 'Guardando…' : 'Guardar etiquetas'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Archivar caso en el CRM'),
+                      subtitle: const Text(
+                        'Oculta el caso de la lista principal; puedes volver a mostrarlo cuando quieras.',
+                      ),
+                      value: p.caseArchived,
+                      onChanged: (_archivedBusy || _updatingStatus)
+                          ? null
+                          : (v) => _setArchived(v),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text('Historial de estados',
+                              style: Theme.of(context).textTheme.titleLarge),
+                        ),
+                        TextButton.icon(
+                          onPressed: _copyHistoryBusy ? null : _copyStatusHistory,
+                          icon: _copyHistoryBusy
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.copy_all_outlined, size: 18),
+                          label: Text(
+                            _copyHistoryBusy ? 'Copiando…' : 'Copiar historial',
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     StreamBuilder<QuerySnapshot>(
                       stream: ref
