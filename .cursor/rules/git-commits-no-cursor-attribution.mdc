@@ -1,0 +1,23 @@
+---
+description: Evitar atribución a Cursor en commits y mensajes de Git
+alwaysApply: true
+---
+
+# Commits Git sin atribución a Cursor
+
+## Prohibido (salvo que el usuario lo pida explícitamente)
+
+- Añadir trailers **`Co-authored-by: Cursor`**, **`Generated with Cursor`**, u otras firmas automáticas del asistente en el mensaje de commit.
+- Escribir en el cuerpo del commit o en la descripción de PR frases del tipo **"commit creado por Cursor"**, **"generado por IA"**, etc.
+
+## Cómo commitear desde el agente
+
+El entorno puede inyectar `Co-authored-by: Cursor` cuando se usa `git commit -m "..."` o `git commit --amend -m "..."`.
+
+- Preferir **`git commit-tree`** pasando el mensaje **por stdin** (sin `-m`), con `GIT_AUTHOR_*` / `GIT_COMMITTER_*` ya definidos, y luego `git reset --hard <hash>` en la rama deseada; o un script equivalente (p. ej. Python `subprocess` con `input=msg_bytes`).
+- Si el usuario prefiere flujo normal: usar **mensaje en archivo** y revisar con `git cat-file -p HEAD` que no haya trailers no deseados antes de `push`.
+- Tras reescribir historia en una rama ya publicada, usar **`git push --force-with-lease`**.
+
+## Recordatorio
+
+La autoría del commit debe quedar solo con **`user.name` / `user.email`** del proyecto o con `--author=...` acordado con el usuario.
