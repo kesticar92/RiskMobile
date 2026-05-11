@@ -138,7 +138,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             _DocUploadStatus.completed => 'completado',
             _DocUploadStatus.error => 'error',
           };
-          final sz = d.sizeBytes ?? '';
+          final sz = d.sizeBytes != null ? '${d.sizeBytes}' : '';
           return '${d.name}\t${d.type}\t${d.documentType}\t$st\t$sz';
         })
         .join('\n');
