@@ -63,7 +63,5 @@ GoogleService-Info.plist
 # Local helper scripts (no versionar)
 /tools/
 
-# Cursor: ignorar configuración local; versionar reglas del proyecto en .cursor/rules/
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
+# Cursor (configuración local; no subir a GitHub)
+.cursor/
