@@ -1,6 +1,6 @@
 # Resumen para exposicion por ramas
 
-**Ultima actualizacion:** **8 de mayo de 2026**. Incluye secciones **11** a **11.5** (RF-K5–K14, RF-B5–B9) y **12** con **RF-K15–K19** y **RF-B10–B14** implementados, más estado de integración entre ramas.
+**Ultima actualizacion:** **11 de mayo de 2026**. Incluye secciones **11** a **11.5**, **12** (**RF-K15–K19**, **RF-B10–B14**) y **14** (**RF-B15–RF-B19** en `brandon-main`, cola local de documentos), más estado de integración entre ramas.
 
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
@@ -785,4 +785,34 @@ Tras un merge **de `brandon-main` hacia `kevin-main`**, el árbol de archivos de
 
 - `brandon-main` ya integró `kevin-main` mediante merge, quedando una rama de prueba con ambas tandas (Kevin + Brandon).
 - Si se quiere simetría total, falta merge inverso de `brandon-main` hacia `kevin-main` o integración de ambas en `main`.
+
+---
+
+## 14) Quinta oleada — **RF-B15–RF-B19** (`brandon-main`) — **11/05/2026**
+
+**Estado:** **implementados** en codigo (pantalla **Mis documentos**, cola local antes de subir a Storage).
+
+Complementan **RF-B10–B14** (vista de documentos ya en la nube) con control operativo de los archivos que el cliente **aún no** ha enviado.
+
+### 14.1) Tabla resumen (`brandon-main`)
+
+| ID | Nombre | Comportamiento en la app |
+|----|--------|--------------------------|
+| **RF-B15** | Resumen de cola local | Chips con total de archivos en cola, **MB estimados** (suma de `sizeBytes` tras validación), y conteos **Pend. / Err. / Ok**. |
+| **RF-B16** | Filtro por tipo de soporte (cola) | `FilterChip` **Todos** + un chip por cada tipo de documento; la lista mostrada respeta el filtro. |
+| **RF-B17** | Orden de cola local | `ChoiceChip` **Captura** (orden de llegada), **Tipo soporte**, **Nombre**; usa campo `captureOrder` en `_DocItem`. |
+| **RF-B18** | Agrupar cola por tipo | `FilterChip` **Agrupar por tipo**: secciones con titulo `tipo (N)` y filas bajo cada grupo. |
+| **RF-B19** | Copiar cola y quitar pendientes | **Copiar cola (TSV)** al portapapeles (nombre, tipo archivo, tipo soporte, estado, bytes). **Quitar pendientes** elimina con confirmacion solo items **pendiente** o **error** (no borra completados). |
+
+**Archivo tocado:** `lib/features/documents/presentation/screens/documents_screen.dart`.
+
+### 14.2) Autoria y ramas
+
+- Subir en **`brandon-main`** (p. ej. `feat(brandon): RF-B15–B19 cola local documentos`).
+
+### 14.3) Demo sugerida
+
+1. Añadir varios archivos mezclando tipos; ver resumen **RF-B15** y filtrar por tipo **RF-B16**.
+2. Cambiar orden **RF-B17** y activar **Agrupar por tipo** **RF-B18**.
+3. **Copiar cola (TSV)** y pegar en Excel; usar **Quitar pendientes** tras un error simulado **RF-B19**.
 

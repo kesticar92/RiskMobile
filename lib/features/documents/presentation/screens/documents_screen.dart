@@ -22,6 +22,9 @@ import '../../../../shared/models/financial_profile_model.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/glass_card.dart';
 
+/// RF-B17: orden de la cola local antes de subir.
+enum _LocalQueueSort { captureOrder, byDocumentType, byFileName }
+
 /// RF08 — Cámara · RF09 — Archivos (PDF/imagen) · RF35 — Firebase Storage por usuario/caso.
 class DocumentsScreen extends ConsumerStatefulWidget {
   final String? caseId;
@@ -66,12 +69,132 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   String _documentsSearch = '';
   bool _sortNewestFirst = true;
   bool _imageGridMode = true;
+
+  /// RF-B15–B19: cola local antes de subir a Storage.
+  int _localCaptureSeq = 0;
+  String _localQueueFilterType = '';
+  _LocalQueueSort _localQueueSort = _LocalQueueSort.captureOrder;
+  bool _localQueueGroupedByType = false;
+
   int _currentUploadIndex = 0;
   int _currentUploadTotal = 0;
   DateTime? _uploadStartedAt;
 
   bool get _hasRetryableErrors =>
       _documents.any((d) => d.status == _DocUploadStatus.error);
+
+  int _localQueuePendingCount() =>
+      _documents.where((d) => d.status == _DocUploadStatus.pending).length;
+
+  int _localQueueErrorCount() =>
+      _documents.where((d) => d.status == _DocUploadStatus.error).length;
+
+  int _localQueueCompletedCount() =>
+      _documents.where((d) => d.status == _DocUploadStatus.completed).length;
+
+  int _localQueueTotalBytes() =>
+      _documents.fold<int>(0, (s, d) => s + (d.sizeBytes ?? 0));
+
+  List<_DocItem> _filteredLocalQueue() {
+    if (_localQueueFilterType.isEmpty) return List<_DocItem>.from(_documents);
+    return _documents
+        .where((d) => d.documentType == _localQueueFilterType)
+        .toList();
+  }
+
+  List<_DocItem> _orderedLocalQueue(List<_DocItem> list) {
+    final out = List<_DocItem>.from(list);
+    switch (_localQueueSort) {
+      case _LocalQueueSort.captureOrder:
+        out.sort((a, b) => a.captureOrder.compareTo(b.captureOrder));
+        break;
+      case _LocalQueueSort.byDocumentType:
+        out.sort((a, b) {
+          final c = a.documentType.compareTo(b.documentType);
+          if (c != 0) return c;
+          return a.captureOrder.compareTo(b.captureOrder);
+        });
+        break;
+      case _LocalQueueSort.byFileName:
+        out.sort((a, b) {
+          final c = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          if (c != 0) return c;
+          return a.captureOrder.compareTo(b.captureOrder);
+        });
+        break;
+    }
+    return out;
+  }
+
+  Future<void> _copyLocalQueueTsv() async {
+    final rows = _orderedLocalQueue(_filteredLocalQueue());
+    if (rows.isEmpty) return;
+    const h = 'Nombre\tTipo archivo\tTipo soporte\tEstado\tBytes';
+    final body = rows
+        .map((d) {
+          final st = switch (d.status) {
+            _DocUploadStatus.pending => 'pendiente',
+            _DocUploadStatus.uploading => 'subiendo',
+            _DocUploadStatus.completed => 'completado',
+            _DocUploadStatus.error => 'error',
+          };
+          final sz = d.sizeBytes ?? '';
+          return '${d.name}\t${d.type}\t${d.documentType}\t$st\t$sz';
+        })
+        .join('\n');
+    await Clipboard.setData(ClipboardData(text: '$h\n$body'));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cola copiada (TSV).')),
+    );
+  }
+
+  Future<void> _confirmClearLocalQueue() async {
+    final removable = _documents
+        .where(
+          (d) =>
+              d.status == _DocUploadStatus.pending ||
+              d.status == _DocUploadStatus.error,
+        )
+        .length;
+    if (removable == 0) {
+      _showErr('No hay archivos pendientes o con error para quitar.');
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quitar de la cola'),
+        content: Text(
+          'Se eliminarán $removable archivo(s) que aún no se subieron '
+          '(pendientes o con error). Los ya subidos no se tocan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _documents.removeWhere(
+        (d) =>
+            d.status == _DocUploadStatus.pending ||
+            d.status == _DocUploadStatus.error,
+      );
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cola actualizada.')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -146,6 +269,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     if (img.path.isEmpty) {
       bytes = await img.readAsBytes();
     }
+    final co = _localCaptureSeq++;
     final item = _DocItem(
       id: _uuid.v4(),
       name: name,
@@ -153,6 +277,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       path: path,
       bytes: bytes,
       documentType: _selectedDocumentType,
+      captureOrder: co,
     );
     final validation = await _validateItemQuality(item);
     if (!validation.ok) {
@@ -160,6 +285,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       return;
     }
     await _optimizeImageItem(item);
+    item.sizeBytes = await _getItemSize(item);
     if (!mounted) return;
     setState(() => _documents.add(item));
   }
@@ -180,6 +306,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     if (img.path.isEmpty) {
       bytes = await img.readAsBytes();
     }
+    final co = _localCaptureSeq++;
     final item = _DocItem(
       id: _uuid.v4(),
       name: name.isNotEmpty ? name : 'imagen.jpg',
@@ -187,6 +314,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       path: path,
       bytes: bytes,
       documentType: _selectedDocumentType,
+      captureOrder: co,
     );
     final validation = await _validateItemQuality(item);
     if (!validation.ok) {
@@ -194,6 +322,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       return;
     }
     await _optimizeImageItem(item);
+    item.sizeBytes = await _getItemSize(item);
     if (!mounted) return;
     setState(() => _documents.add(item));
   }
@@ -215,6 +344,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       _showErr('No se pudo leer el archivo seleccionado.');
       return;
     }
+    final co = _localCaptureSeq++;
     final item = _DocItem(
       id: _uuid.v4(),
       name: f.name,
@@ -222,6 +352,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       path: path,
       bytes: f.bytes,
       documentType: _selectedDocumentType,
+      captureOrder: co,
     );
     final validation = await _validateItemQuality(item);
     if (!validation.ok) {
@@ -229,6 +360,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       return;
     }
     await _optimizeImageItem(item);
+    item.sizeBytes = await _getItemSize(item);
     if (!mounted) return;
     setState(() => _documents.add(item));
   }
@@ -580,6 +712,112 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         ],
       ),
     );
+  }
+
+  String _formatMbApprox(int bytes) {
+    if (bytes <= 0) return '0.00';
+    return (bytes / (1024 * 1024)).toStringAsFixed(2);
+  }
+
+  Widget _localDocTile(_DocItem doc, {required int animMs}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.blueTranslucent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              doc.type == 'pdf'
+                  ? Icons.picture_as_pdf
+                  : Icons.image_outlined,
+              color: AppColors.primaryBlue,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  doc.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  doc.type.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textLight,
+                  ),
+                ),
+                Text(
+                  doc.documentType,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (doc.status == _DocUploadStatus.error)
+                  Text(
+                    'Error al subir. Reintenta.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.riskHigh,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Icon(
+            switch (doc.status) {
+              _DocUploadStatus.pending => Icons.schedule,
+              _DocUploadStatus.uploading => Icons.cloud_upload,
+              _DocUploadStatus.completed => Icons.check_circle,
+              _DocUploadStatus.error => Icons.error,
+            },
+            color: switch (doc.status) {
+              _DocUploadStatus.pending => AppColors.textSecondary,
+              _DocUploadStatus.uploading => AppColors.primaryBlue,
+              _DocUploadStatus.completed => AppColors.riskLow,
+              _DocUploadStatus.error => AppColors.riskHigh,
+            },
+            size: 18,
+          ),
+          IconButton(
+            tooltip: 'Previsualizar',
+            icon: const Icon(Icons.visibility_outlined,
+                size: 18, color: AppColors.primaryBlue),
+            onPressed: _uploading ? null : () => _openPreview(doc),
+          ),
+          if (doc.status == _DocUploadStatus.error)
+            IconButton(
+              tooltip: 'Reintentar',
+              icon: const Icon(Icons.refresh,
+                  size: 18, color: AppColors.primaryBlue),
+              onPressed: _uploading ? null : () => _retryOne(doc),
+            ),
+          IconButton(
+            icon: const Icon(Icons.close,
+                size: 16, color: AppColors.textLight),
+            onPressed: _uploading ? null : () => _removeById(doc.id),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: Duration(milliseconds: animMs)).slideX(begin: 0.2);
   }
 
   String _estimateRemaining() {
@@ -1157,108 +1395,188 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                     ).animate().fadeIn(delay: 200.ms),
                     if (_documents.isNotEmpty) ...[
                       const SizedBox(height: 20),
-                      Text('Documentos adjuntados',
-                          style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Documentos adjuntados',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          Chip(
+                            avatar: const Icon(Icons.folder_open, size: 16),
+                            label: Text(
+                              '${_documents.length} archivo(s) · '
+                              '${_formatMbApprox(_localQueueTotalBytes())} MB',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          Chip(
+                            label: Text('Pend.: ${_localQueuePendingCount()}'),
+                          ),
+                          Chip(
+                            label: Text('Err.: ${_localQueueErrorCount()}'),
+                          ),
+                          Chip(
+                            label: Text('Ok: ${_localQueueCompletedCount()}'),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 10),
-                      ..._documents.map((doc) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.border),
+                      Text(
+                        'Filtro cola local',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('Todos'),
+                            selected: _localQueueFilterType.isEmpty,
+                            onSelected: (_) =>
+                                setState(() => _localQueueFilterType = ''),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.blueTranslucent,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  doc.type == 'pdf'
-                                      ? Icons.picture_as_pdf
-                                      : Icons.image_outlined,
-                                  color: AppColors.primaryBlue,
-                                  size: 18,
-                                ),
+                          ..._documentTypes.map((t) {
+                            final sel = _localQueueFilterType == t;
+                            return FilterChip(
+                              label: Text(t, style: const TextStyle(fontSize: 11)),
+                              selected: sel,
+                              onSelected: (_) => setState(
+                                () => _localQueueFilterType = sel ? '' : t,
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(doc.name,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 13),
-                                        overflow: TextOverflow.ellipsis),
-                                    Text(doc.type.toUpperCase(),
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textLight)),
-                                    Text(
-                                      doc.documentType,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                    if (doc.status == _DocUploadStatus.error)
-                                      Text(
-                                        'Error al subir. Reintenta.',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.riskHigh,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                switch (doc.status) {
-                                  _DocUploadStatus.pending => Icons.schedule,
-                                  _DocUploadStatus.uploading => Icons.cloud_upload,
-                                  _DocUploadStatus.completed =>
-                                    Icons.check_circle,
-                                  _DocUploadStatus.error => Icons.error,
-                                },
-                                color: switch (doc.status) {
-                                  _DocUploadStatus.pending =>
-                                    AppColors.textSecondary,
-                                  _DocUploadStatus.uploading =>
-                                    AppColors.primaryBlue,
-                                  _DocUploadStatus.completed => AppColors.riskLow,
-                                  _DocUploadStatus.error => AppColors.riskHigh,
-                                },
-                                size: 18,
-                              ),
-                              IconButton(
-                                tooltip: 'Previsualizar',
-                                icon: const Icon(Icons.visibility_outlined,
-                                    size: 18, color: AppColors.primaryBlue),
-                                onPressed: _uploading ? null : () => _openPreview(doc),
-                              ),
-                              if (doc.status == _DocUploadStatus.error)
-                                IconButton(
-                                  tooltip: 'Reintentar',
-                                  icon: const Icon(Icons.refresh,
-                                      size: 18, color: AppColors.primaryBlue),
-                                  onPressed: _uploading ? null : () => _retryOne(doc),
-                                ),
-                              IconButton(
-                                icon: const Icon(Icons.close,
-                                    size: 16, color: AppColors.textLight),
-                                onPressed: _uploading
-                                    ? null
-                                    : () => _removeById(doc.id),
-                              ),
-                            ],
+                            );
+                          }),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Orden',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Captura'),
+                            selected:
+                                _localQueueSort == _LocalQueueSort.captureOrder,
+                            onSelected: (_) => setState(
+                              () => _localQueueSort =
+                                  _LocalQueueSort.captureOrder,
+                            ),
                           ),
-                        ).animate().fadeIn(delay: 50.ms).slideX(begin: 0.2);
-                      }),
+                          ChoiceChip(
+                            label: const Text('Tipo soporte'),
+                            selected: _localQueueSort ==
+                                _LocalQueueSort.byDocumentType,
+                            onSelected: (_) => setState(
+                              () => _localQueueSort =
+                                  _LocalQueueSort.byDocumentType,
+                            ),
+                          ),
+                          ChoiceChip(
+                            label: const Text('Nombre'),
+                            selected:
+                                _localQueueSort == _LocalQueueSort.byFileName,
+                            onSelected: (_) => setState(
+                              () => _localQueueSort = _LocalQueueSort.byFileName,
+                            ),
+                          ),
+                          FilterChip(
+                            label: const Text('Agrupar por tipo'),
+                            selected: _localQueueGroupedByType,
+                            onSelected: (v) => setState(
+                              () => _localQueueGroupedByType = v,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _uploading ? null : _copyLocalQueueTsv,
+                              icon: const Icon(Icons.copy, size: 18),
+                              label: const Text('Copiar cola (TSV)'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  _uploading ? null : _confirmClearLocalQueue,
+                              icon: const Icon(Icons.clear_all, size: 18),
+                              label: const Text('Quitar pendientes'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Builder(
+                        builder: (context) {
+                          final ordered =
+                              _orderedLocalQueue(_filteredLocalQueue());
+                          if (ordered.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Ningún archivo coincide con el filtro.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            );
+                          }
+                          if (!_localQueueGroupedByType) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                for (var i = 0; i < ordered.length; i++)
+                                  _localDocTile(ordered[i], animMs: 40 + i * 25),
+                              ],
+                            );
+                          }
+                          final byType = <String, List<_DocItem>>{};
+                          for (final d in ordered) {
+                            byType.putIfAbsent(d.documentType, () => []).add(d);
+                          }
+                          final keys = byType.keys.toList()..sort();
+                          var i = 0;
+                          final children = <Widget>[];
+                          for (final k in keys) {
+                            final list = byType[k]!;
+                            children.add(
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '$k (${list.length})',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            );
+                            for (final doc in list) {
+                              children.add(
+                                _localDocTile(doc, animMs: 40 + i * 25),
+                              );
+                              i++;
+                            }
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: children,
+                          );
+                        },
+                      ),
                       const SizedBox(height: 20),
                       GradientButton(
                         label: 'Guardar y subir documentos',
@@ -1296,6 +1614,10 @@ class _DocItem {
   String path;
   Uint8List? bytes;
   final String documentType;
+  /// RF-B17: orden estable al capturar.
+  final int captureOrder;
+  /// RF-B15: tamaño conocido tras validación (bytes).
+  int? sizeBytes;
   _DocUploadStatus status;
   String? errorMessage;
 
@@ -1306,6 +1628,7 @@ class _DocItem {
     required this.path,
     this.bytes,
     required this.documentType,
+    required this.captureOrder,
   }) : status = _DocUploadStatus.pending;
 }
 
