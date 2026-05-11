@@ -2,7 +2,17 @@
 
 **Plataforma móvil SaaS de evaluación financiera, simulación crediticia y gestión de asesoría para asesores financieros independientes.**
 
-**Última actualización de este README:** **04/05/2026** — **RF-K15–K19** implementados (CRM Kevin); **RF-B10–B14** siguen backlog (Brandon). Ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§12** y `RESUMEN_ENTREGABLE.md` **§16**.
+**Última actualización de este README:** **11/05/2026** — **RF-K20–K24** en código en `kevin-main` (filtros de seguimiento CRM, búsqueda por email/teléfono, KPIs de la vista, chat rápido, mensaje opcional en notificación de estado). Trayectorias anteriores: **RF-K15–K19** y documentación §12–13 en `RESUMEN_PARA_EXPOSICION_RAMOS.md`; `RESUMEN_ENTREGABLE.md` §16 cuando aplique.
+
+### Android — APK release para prueba en celular (08/05/2026)
+
+- **Qué se hizo:** compilación local con `flutter build apk --release` sobre la línea actual del proyecto (incluye integración Kevin + Brandon documentada ese día).
+- **Ajustes de build:** `android/app/google-services.json` alineado con el mismo proyecto Firebase que `lib/firebase_options.dart` (el archivo real de consola sigue en `.gitignore`); en `android/app/build.gradle.kts`, `minSdk` al menos **23** por requisito de Firebase Auth.
+- **Dónde queda la APK** (tras un build exitoso):
+  - Desde la raíz del repo: `build/app/outputs/flutter-apk/app-release.apk`
+  - En este equipo (ejemplo): `D:\RiskMobile\build\app\outputs\flutter-apk\app-release.apk`
+
+Para regenerar: desde la raíz del proyecto, `flutter build apk --release` (opcional APK más liviana por arquitectura: `flutter build apk --release --split-per-abi`).
 
 ---
 

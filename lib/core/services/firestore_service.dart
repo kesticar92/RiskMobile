@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/models/financial_profile_model.dart';
@@ -38,6 +40,41 @@ class FirestoreService {
     final doc = await _db.collection(AppConstants.colCases).doc(id).get();
     if (!doc.exists) return null;
     return FinancialProfileModel.fromFirestore(doc);
+  }
+
+  /// RF-K21: datos de contacto para búsqueda en CRM (chunks de `whereIn`).
+  Future<Map<String, UserModel>> getUsersByIds(Set<String> uids) async {
+    final out = <String, UserModel>{};
+    final ids = uids.where((e) => e.isNotEmpty).toList();
+    for (var i = 0; i < ids.length; i += 30) {
+      final end = math.min(i + 30, ids.length);
+      final chunk = ids.sublist(i, end);
+      final snap = await _db
+          .collection(AppConstants.colUsers)
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final d in snap.docs) {
+        out[d.id] = UserModel.fromFirestore(d);
+      }
+    }
+    return out;
+  }
+
+  /// RF-K24: total de documentos pendientes de revisión en los casos indicados.
+  Future<int> countDocumentsPendingReviewForCases(List<String> caseIds) async {
+    if (caseIds.isEmpty) return 0;
+    var total = 0;
+    for (var i = 0; i < caseIds.length; i += 30) {
+      final end = math.min(i + 30, caseIds.length);
+      final chunk = caseIds.sublist(i, end);
+      final qs = await _db
+          .collection(AppConstants.colDocuments)
+          .where('caseId', whereIn: chunk)
+          .where('status', isEqualTo: AppConstants.documentPendingReview)
+          .get();
+      total += qs.docs.length;
+    }
+    return total;
   }
 
   Stream<List<FinancialProfileModel>> streamClientProfiles(String clientId) {

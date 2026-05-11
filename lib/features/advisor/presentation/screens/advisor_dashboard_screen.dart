@@ -14,6 +14,46 @@ import '../../../../shared/models/user_model.dart';
 
 enum _ClientSort { byUpdatedDesc, byNameAsc, byFollowUpAsc }
 
+/// RF-K20: filtros rápidos por ventana del próximo seguimiento (`nextFollowUpAt`).
+enum _FollowUpCRMFilter { all, overdue, today, nextSevenDays, none }
+
+DateTime _crmDateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+bool _crmMatchesFollowUpFilter(
+  FinancialProfileModel p,
+  _FollowUpCRMFilter f,
+  DateTime now,
+) {
+  final startToday = _crmDateOnly(now);
+  final fu = p.nextFollowUpAt;
+  switch (f) {
+    case _FollowUpCRMFilter.all:
+      return true;
+    case _FollowUpCRMFilter.none:
+      return fu == null;
+    case _FollowUpCRMFilter.overdue:
+      if (fu == null) return false;
+      return _crmDateOnly(fu).isBefore(startToday);
+    case _FollowUpCRMFilter.today:
+      if (fu == null) return false;
+      return _crmDateOnly(fu) == startToday;
+    case _FollowUpCRMFilter.nextSevenDays:
+      if (fu == null) return false;
+      final d = _crmDateOnly(fu);
+      if (!d.isAfter(startToday)) return false;
+      final lastInclusive = startToday.add(const Duration(days: 7));
+      return !d.isAfter(lastInclusive);
+  }
+}
+
+String _crmPhoneDigits(String? raw) =>
+    (raw ?? '').replaceAll(RegExp(r'\D'), '');
+
+String _crmFilteredSig(List<FinancialProfileModel> f) {
+  final ids = f.map((e) => e.id).toList()..sort();
+  return '${f.length}:${ids.join(",")}';
+}
+
 String _crmTagLabel(String stored) {
   if (stored.isEmpty) return stored;
   return stored[0].toUpperCase() + stored.substring(1);
@@ -181,6 +221,20 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
   bool _includeArchived = false;
   final Set<String> _selectedTags = {};
 
+  /// RF-K20
+  _FollowUpCRMFilter _followUpCRMFilter = _FollowUpCRMFilter.all;
+  /// RF-K21 — cache `clientId` → usuario Firestore para email/teléfono en búsqueda.
+  Map<String, UserModel> _userByClientId = {};
+  String? _contactsLoadedSig;
+  /// RF-K24 — firma ya resuelta (evita consultas repetidas si la vista no cambia).
+  String? _lastPendingFetchedSig;
+  int _pendingDocsCount = 0;
+  bool _pendingDocsBusy = false;
+  /// Última lista filtrada (sincronizada en cada build) para descartar respuestas obsoletas.
+  String _crmFilteredSigLive = '';
+
+  static const String _crmEmptyFilteredSig = '0:';
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -202,7 +256,211 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
       _maxAmountCtrl.text.trim().isNotEmpty ||
       _filterPriorityOnly ||
       _selectedTags.isNotEmpty ||
-      _includeArchived;
+      _includeArchived ||
+      _followUpCRMFilter != _FollowUpCRMFilter.all;
+
+  Future<void> _ensureContactsLoaded(List<FinancialProfileModel> profiles) async {
+    final ids = profiles
+        .map((p) => p.clientId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final sig = (ids.toList()..sort()).join('|');
+    if (sig == _contactsLoadedSig) return;
+    _contactsLoadedSig = sig;
+    if (ids.isEmpty) {
+      setState(() => _userByClientId = {});
+      return;
+    }
+    final map = await ref.read(firestoreServiceProvider).getUsersByIds(ids);
+    if (!mounted || _contactsLoadedSig != sig) return;
+    setState(() => _userByClientId = map);
+  }
+
+  bool _crmMatchesProfileSearch(FinancialProfileModel p, String qLower) {
+    if (qLower.isEmpty) return true;
+    if (p.clientName.toLowerCase().contains(qLower)) return true;
+    if (p.id.toLowerCase().contains(qLower)) return true;
+    final u = _userByClientId[p.clientId];
+    if (u == null) return false;
+    if (u.email.toLowerCase().contains(qLower)) return true;
+    final qDigits = _crmPhoneDigits(qLower);
+    if (qDigits.length >= 3) {
+      final ph = _crmPhoneDigits(u.phone);
+      if (ph.contains(qDigits)) return true;
+    }
+    final rawPhone = (u.phone ?? '').toLowerCase();
+    if (rawPhone.isNotEmpty && rawPhone.contains(qLower)) return true;
+    return false;
+  }
+
+  void _schedulePendingDocCount(List<FinancialProfileModel> filtered) {
+    final sig = _crmFilteredSig(filtered);
+    if (filtered.isEmpty) {
+      if (_lastPendingFetchedSig == _crmEmptyFilteredSig &&
+          _pendingDocsCount == 0 &&
+          !_pendingDocsBusy) {
+        return;
+      }
+      setState(() {
+        _pendingDocsCount = 0;
+        _pendingDocsBusy = false;
+        _lastPendingFetchedSig = _crmEmptyFilteredSig;
+      });
+      return;
+    }
+    if (sig == _lastPendingFetchedSig && !_pendingDocsBusy) return;
+    final capturedSig = sig;
+    setState(() => _pendingDocsBusy = true);
+    ref
+        .read(firestoreServiceProvider)
+        .countDocumentsPendingReviewForCases(
+          filtered.map((e) => e.id).toList(),
+        )
+        .then((n) {
+          if (!mounted) return;
+          if (_crmFilteredSigLive != capturedSig) {
+            setState(() => _pendingDocsBusy = false);
+            return;
+          }
+          setState(() {
+            _pendingDocsCount = n;
+            _pendingDocsBusy = false;
+            _lastPendingFetchedSig = capturedSig;
+          });
+        });
+  }
+
+  /// KPI locales RF-K24 sobre una lista ya filtrada.
+  Future<void> _copyKpisFromView({
+    required List<FinancialProfileModel> filtered,
+    required BuildContext outerContext,
+  }) async {
+    final startToday = _crmDateOnly(DateTime.now());
+    int overdueFu = 0;
+    int todayFu = 0;
+    int priorityN = 0;
+    int inProgressN = 0;
+    int approvedN = 0;
+    for (final p in filtered) {
+      if (p.casePriority) priorityN++;
+      if (AppConstants.isCaseInProgress(p.caseStatus)) inProgressN++;
+      if (p.caseStatus == AppConstants.caseCreditApproved) approvedN++;
+      final fu = p.nextFollowUpAt;
+      if (fu != null) {
+        final d = _crmDateOnly(fu);
+        if (d.isBefore(startToday)) overdueFu++;
+        if (d == startToday) todayFu++;
+      }
+    }
+    final pendingLine = _pendingDocsBusy
+        ? 'Documentos pendientes revisión (vista): (cargando…)'
+        : 'Documentos pendientes revisión (vista): $_pendingDocsCount';
+    final text = [
+      'RiskMobile — KPIs vista actual',
+      'Casos en vista: ${filtered.length}',
+      'Prioridad alta: $priorityN',
+      'En proceso: $inProgressN',
+      'Aprobados: $approvedN',
+      'Seguimiento vencido: $overdueFu',
+      'Seguimiento hoy: $todayFu',
+      pendingLine,
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (outerContext.mounted) {
+      ScaffoldMessenger.of(outerContext).showSnackBar(
+        const SnackBar(content: Text('KPIs copiados al portapapeles.')),
+      );
+    }
+  }
+
+  /// RF-K24: resumen ejecutivo sobre la lista filtrada actual.
+  Widget _buildKpiBanner({
+    required BuildContext context,
+    required List<FinancialProfileModel> filtered,
+  }) {
+    final startToday = _crmDateOnly(DateTime.now());
+    var overdueFu = 0;
+    var todayFu = 0;
+    var priorityN = 0;
+    var inProgressN = 0;
+    var approvedN = 0;
+    for (final p in filtered) {
+      if (p.casePriority) priorityN++;
+      if (AppConstants.isCaseInProgress(p.caseStatus)) inProgressN++;
+      if (p.caseStatus == AppConstants.caseCreditApproved) approvedN++;
+      final fu = p.nextFollowUpAt;
+      if (fu != null) {
+        final d = _crmDateOnly(fu);
+        if (d.isBefore(startToday)) overdueFu++;
+        if (d == startToday) todayFu++;
+      }
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          tilePadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          title: Row(
+            children: [
+              Icon(Icons.insights_outlined,
+                  size: 20, color: AppColors.primaryBlueDark),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Indicadores de la vista actual',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _KpiChip(label: 'En vista', value: '${filtered.length}'),
+                      _KpiChip(label: 'Prioridad', value: '$priorityN'),
+                      _KpiChip(label: 'Seg. vencido', value: '$overdueFu'),
+                      _KpiChip(label: 'Seg. hoy', value: '$todayFu'),
+                      _KpiChip(label: 'En proceso', value: '$inProgressN'),
+                      _KpiChip(label: 'Aprobados', value: '$approvedN'),
+                      _KpiChip(
+                        label: 'Docs pend. revisión',
+                        value: _pendingDocsBusy ? '…' : '$_pendingDocsCount',
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _copyKpisFromView(
+                        filtered: filtered,
+                        outerContext: context,
+                      ),
+                      icon: const Icon(Icons.copy, size: 18),
+                      label: const Text('Copiar KPIs'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,9 +493,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                   p.caseStatus == widget.filterStatus) &&
               (_selectedStatuses.isEmpty ||
                   _selectedStatuses.contains(p.caseStatus));
-          final matchSearch = q.isEmpty ||
-              p.clientName.toLowerCase().contains(q) ||
-              p.id.toLowerCase().contains(q);
+          final matchFollowUp =
+              _crmMatchesFollowUpFilter(p, _followUpCRMFilter, now);
           final matchMinAmount =
               minAmount == null || p.desiredAmount >= minAmount;
           final matchMaxAmount =
@@ -251,7 +508,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
           final matchTags = _selectedTags.isEmpty ||
               p.caseTags.any((t) => _selectedTags.contains(t));
           return matchStatus &&
-              matchSearch &&
+              _crmMatchesProfileSearch(p, q) &&
+              matchFollowUp &&
               matchMinAmount &&
               matchMaxAmount &&
               matchDate &&
@@ -276,6 +534,13 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                 return ad.compareTo(bd);
             }
           });
+
+        _crmFilteredSigLive = _crmFilteredSig(filtered);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _ensureContactsLoaded(allProfiles);
+          _schedulePendingDocCount(filtered);
+        });
 
         return CustomScrollView(
           slivers: [
@@ -310,12 +575,15 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    _buildKpiBanner(context: context, filtered: filtered),
+                    const SizedBox(height: 12),
                     // Search
                     TextField(
                       controller: _searchCtrl,
                       onChanged: (v) => setState(() => _search = v),
                       decoration: InputDecoration(
-                        hintText: 'Buscar por cliente o ID de caso...',
+                        hintText:
+                            'Cliente, ID de caso, email o teléfono...',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _search.isNotEmpty
                             ? IconButton(
@@ -362,6 +630,64 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                           selected: _sortMode == _ClientSort.byFollowUpAsc,
                           onSelected: (_) => setState(
                             () => _sortMode = _ClientSort.byFollowUpAsc,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Seguimiento (fecha próxima acción)',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Todos'),
+                          selected:
+                              _followUpCRMFilter == _FollowUpCRMFilter.all,
+                          onSelected: (_) => setState(
+                            () => _followUpCRMFilter = _FollowUpCRMFilter.all,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Vencido'),
+                          selected: _followUpCRMFilter ==
+                              _FollowUpCRMFilter.overdue,
+                          onSelected: (_) => setState(
+                            () => _followUpCRMFilter =
+                                _FollowUpCRMFilter.overdue,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Hoy'),
+                          selected:
+                              _followUpCRMFilter == _FollowUpCRMFilter.today,
+                          onSelected: (_) => setState(
+                            () =>
+                                _followUpCRMFilter = _FollowUpCRMFilter.today,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Próx. 7 días'),
+                          selected: _followUpCRMFilter ==
+                              _FollowUpCRMFilter.nextSevenDays,
+                          onSelected: (_) => setState(
+                            () => _followUpCRMFilter =
+                                _FollowUpCRMFilter.nextSevenDays,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Sin fecha'),
+                          selected:
+                              _followUpCRMFilter == _FollowUpCRMFilter.none,
+                          onSelected: (_) => setState(
+                            () => _followUpCRMFilter = _FollowUpCRMFilter.none,
                           ),
                         ),
                       ],
@@ -477,6 +803,8 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                                       _filterPriorityOnly = false;
                                       _selectedTags.clear();
                                       _includeArchived = false;
+                                      _followUpCRMFilter =
+                                          _FollowUpCRMFilter.all;
                                     });
                                   },
                                   child: const Text('Limpiar todo'),
@@ -636,6 +964,29 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
           ],
         );
       },
+    );
+  }
+}
+
+class _KpiChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _KpiChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        '$label: $value',
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -944,6 +1295,22 @@ class _ClientCard extends ConsumerWidget {
               ),
             ),
           ),
+          if (profile.clientId.isNotEmpty)
+            IconButton(
+              tooltip: 'Chat con cliente',
+              onPressed: () => context.push(
+                AppRoutes.chat,
+                extra: {
+                  'otherUserId': profile.clientId,
+                  'otherUserName': profile.clientName,
+                  'caseId': profile.id,
+                },
+              ),
+              icon: Icon(
+                Icons.chat_bubble_outline,
+                color: AppColors.primaryBlueDark,
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(top: 12, right: 8),
             child: Icon(Icons.chevron_right, color: AppColors.textLight),

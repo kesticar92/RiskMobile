@@ -138,12 +138,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.chat,
         pageBuilder: (context, state) {
-          final args = state.extra as Map<String, String>;
+          final raw = state.extra;
+          String otherUserId = '';
+          String otherUserName = '';
+          String? caseId;
+          if (raw is Map) {
+            otherUserId = '${raw['otherUserId'] ?? ''}';
+            otherUserName = '${raw['otherUserName'] ?? ''}';
+            final c = raw['caseId'];
+            if (c is String && c.isNotEmpty) caseId = c;
+          }
           return CustomTransitionPage(
             child: ChatScreen(
-              otherUserId: args['otherUserId']!,
-              otherUserName: args['otherUserName']!,
-              caseId: args['caseId'],
+              otherUserId: otherUserId,
+              otherUserName: otherUserName.isEmpty ? 'Usuario' : otherUserName,
+              caseId: caseId,
             ),
             transitionsBuilder: _slideTransition,
           );

@@ -1,6 +1,6 @@
 # Resumen para exposicion por ramas
 
-**Ultima actualizacion:** **4 de mayo de 2026**. Incluye secciones **11** a **11.5** (RF-K5–K14, RF-B5–B9) y **12** (**RF-K15–K19** implementados en Kevin; **RF-B10–B14** aun backlog Brandon); flujo `kevin-main` / `brandon-main` en **11.5**.
+**Ultima actualizacion:** **11 de mayo de 2026**. Secciones **11** a **11.5** y **12** (historial oleadas Kevin / Brandon segun el texto de cada §); **§13**: **RF-K20–RF-K24** (**implementados** en `kevin-main`). Estado de merges entre ramas: **12.5** y **11.5**.
 
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
@@ -780,4 +780,38 @@ Tras un merge **de `brandon-main` hacia `kevin-main`**, el árbol de archivos de
 - **RF-K15–K19:** subir como commits en **`kevin-main`** (p. ej. `feat(kevin): RF-K15–K19 CRM seguimiento, tags, archivar, actividad, copiar historial`).
 - **RF-B10–B14:** cuando Brandon implemente, **`brandon-main`** + `feat(brandon): …` segun acuerdo del equipo.
 - Sincronizacion entre ramas: **11.5**.
+
+### 12.5) Integracion entre ramas (08/05/2026)
+
+- `brandon-main` ya integró `kevin-main` mediante merge, quedando una rama de prueba con ambas tandas (Kevin + Brandon).
+- Si se quiere simetría total, falta merge inverso de `brandon-main` hacia `kevin-main` o integración de ambas en `main`.
+
+---
+
+## 13) Quinta oleada — **RF-K20–RF-K24** (`kevin-main`) — **11/05/2026**
+
+**Estado:** **implementados** en codigo (CRM asesor + detalle + router + Firestore).
+
+### 13.1) Tabla resumen (`kevin-main`)
+
+| ID | Nombre | Comportamiento en la app |
+|----|--------|--------------------------|
+| **RF-K20** | Filtro por ventana de seguimiento | Chips **Todos / Vencido / Hoy / Próx. 7 días / Sin fecha** sobre `nextFollowUpAt`; integrado con **Limpiar todo** en filtros avanzados. |
+| **RF-K21** | Búsqueda por email y teléfono | Tras cargar perfiles, lectura por lotes de `users` (`getUsersByIds`): el buscador coincide con nombre, ID de caso, email o teléfono (incl. dígitos). |
+| **RF-K22** | Mensaje opcional al cambiar estado | `TextField` bajo el estado del caso; texto (máx. `caseStatusClientMessageMaxLength`) se añade al cuerpo de la notificación `case_status_changed`; se limpía al guardar. |
+| **RF-K23** | Acceso directo al chat | Icono en cabecera del detalle (`_buildHeader`) y en tarjeta CRM; `context.push` con `otherUserId`, `otherUserName`, `caseId`. Ruta `/chat` tolera `extra` como `Map` con `caseId` opcional. |
+| **RF-K24** | Mini panel de KPIs | `ExpansionTile` **Indicadores de la vista actual** (conteos locales + documentos pendientes vía `countDocumentsPendingReviewForCases` por lotes); **Copiar KPIs** al portapapeles. |
+
+**Archivos tocados:** `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart`; `lib/features/advisor/presentation/screens/client_detail_screen.dart`; `lib/core/services/firestore_service.dart`; `lib/core/router/app_router.dart`; `lib/core/constants/app_constants.dart`; `firestore.indexes.json` (indice compuesto `documents`: `caseId` + `status`).
+
+### 13.2) Autoria y ramas
+
+- Subir en **`kevin-main`** (p. ej. `feat(kevin): RF-K20–K24 CRM seguimiento, busqueda contacto, KPIs, chat`).
+- Desplegar índice nuevo en Firebase si aplica: `firebase deploy --only firestore:indexes`.
+
+### 13.3) Demo sugerida
+
+1. CRM: KPIs expandidos (**RF-K24**), filtro **Vencido** (**RF-K20**), buscar por fragmento de correo (**RF-K21**), icono chat en tarjeta (**RF-K23**).
+2. Detalle: mensaje opcional + cambio de estado (**RF-K22**); chat en cabecera (**RF-K23**).
+3. Cliente: notificación con texto extra (**RF-K22**).
 

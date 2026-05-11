@@ -58,6 +58,9 @@ class AppConstants {
 
   /// RF26: longitud máxima por mensaje en chat.
   static const int chatMessageMaxLength = 500;
+
+  /// RF-K22: texto opcional añadido a la notificación al cliente al cambiar estado.
+  static const int caseStatusClientMessageMaxLength = 280;
   static const List<String> advisorChatTemplates = [
     'Hola, revisé tu caso. Por favor comparte los documentos pendientes para continuar.',
     'Tu caso está en análisis. Te actualizaré apenas tenga novedades.',
