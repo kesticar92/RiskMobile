@@ -2,17 +2,17 @@
 
 **Plataforma móvil SaaS de evaluación financiera, simulación crediticia y gestión de asesoría para asesores financieros independientes.**
 
-**Última actualización de este README:** **11/05/2026** — **RF-K20–K24** en código en `kevin-main` (filtros de seguimiento CRM, búsqueda por email/teléfono, KPIs de la vista, chat rápido, mensaje opcional en notificación de estado). Trayectorias anteriores: **RF-K15–K19** y documentación §12–13 en `RESUMEN_PARA_EXPOSICION_RAMOS.md`; `RESUMEN_ENTREGABLE.md` §16 cuando aplique.
+**Última actualización de este README:** **08/05/2026** — **RF-K15–K19** (Kevin) y **RF-B10–B14** (Brandon) implementados, con integración entre ramas en `brandon-main`. Ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§12** y `RESUMEN_ENTREGABLE.md` **§16**.
 
-### Android — APK release para prueba en celular (08/05/2026)
+---
 
-- **Qué se hizo:** compilación local con `flutter build apk --release` sobre la línea actual del proyecto (incluye integración Kevin + Brandon documentada ese día).
-- **Ajustes de build:** `android/app/google-services.json` alineado con el mismo proyecto Firebase que `lib/firebase_options.dart` (el archivo real de consola sigue en `.gitignore`); en `android/app/build.gradle.kts`, `minSdk` al menos **23** por requisito de Firebase Auth.
-- **Dónde queda la APK** (tras un build exitoso):
-  - Desde la raíz del repo: `build/app/outputs/flutter-apk/app-release.apk`
-  - En este equipo (ejemplo): `D:\RiskMobile\build\app\outputs\flutter-apk\app-release.apk`
+## Cambios del día — 08/05/2026
 
-Para regenerar: desde la raíz del proyecto, `flutter build apk --release` (opcional APK más liviana por arquitectura: `flutter build apk --release --split-per-abi`).
+### Resumen (08/05/2026)
+
+- **Brandon (`brandon-main`) — RF-B10–B14 en código:** agrupación por tipo de documento, orden (más reciente/antiguo), búsqueda por nombre/tipo, vista de imágenes en cuadrícula y acciones para copiar/compartir `downloadUrl` (`share_plus`).
+- **Integración de ramas:** merge de `kevin-main` → `brandon-main` para consolidar RF-K15–K19 + RF-B10–B14 en una sola línea de prueba.
+- **Documentación:** actualización de estado en `README.md`, `RESUMEN_PARA_EXPOSICION_RAMOS.md` (§12) y `RESUMEN_ENTREGABLE.md` (§16).
 
 ---
 
@@ -21,7 +21,7 @@ Para regenerar: desde la raíz del proyecto, `flutter build apk --release` (opci
 ### Resumen (04/05/2026)
 
 - **Kevin (`kevin-main`) — RF-K15–K19 en código:** próximo seguimiento (`nextFollowUpAt`, orden y chips en CRM); etiquetas (`caseTags`, filtro en panel); archivar (`caseArchived`, “Incluir archivados”); última actividad en tarjeta (`lastStatusChangeAt` al cambiar estado); copiar historial de estados y columnas extra en TSV.
-- **Brandon:** RF-B10–B14 documentados en §12.2 — pendiente implementación.
+- **Brandon:** RF-B10–B14 documentados en §12.2 (implementados el 08/05/2026 en `brandon-main`).
 
 ---
 
@@ -169,26 +169,28 @@ Esta sección consolida el avance histórico por requerimiento, con la mejor fec
 | RF36 Recuperar contraseña | Realizado | Sesión inicial (fecha no registrada) | Pantalla y flujo de restablecimiento. |
 | RF37 Historial evaluaciones | Realizado | Sesión previa + 16/04/2026 | Historial y consulta documental por caso. |
 | RF38 Validación documental asesor | Realizado | Sesión previa (fecha no registrada) | Estados de revisión documental y notificación al cliente. |
+| RF04 Roles y permisos finos por pantalla | Realizado | 17/05/2026 · `kevin-main` | `AdvisorRouteGate` / `ClientRouteGate` en rutas CRM, cliente, pagos e historial (`role_guard.dart`, `app_router.dart`). |
+| RF27 Búsqueda + filtro CRM (optimización) | Realizado | 17/05/2026 · `kevin-main` | Índice de contactos (`getUsersByIds`) solo si la búsqueda usa email o teléfono; estadísticas alineadas con vista filtrada. |
+| RF28 Registro de comisiones | Realizado | 17/05/2026 · `kevin-main` | Vínculo opcional a caso, validaciones, alerta costos > comisión (`payments_screen.dart`). |
+| RF29 Panel financiero asesor | Realizado | 17/05/2026 · `kevin-main` | Tab **Financiero**: cartera (total/aprobados/en proceso/rechazados) + comisiones por periodo. |
+| RF30 Utilidad neta e historial consolidado | Realizado | 17/05/2026 · `kevin-main` | Utilidad neta en panel y por fila de historial; copiar resumen al portapapeles. |
+| RF31 Estadísticas del asesor | Realizado | 17/05/2026 · `kevin-main` | Chips Total/Aprobados/En proceso/Rechazados según cartera o vista filtrada; KPIs con rechazados. |
+| RF32 Cierre de sesión en todos los puntos requeridos | Realizado | 17/05/2026 · `kevin-main` | `signOutWithConfirmation` en perfil asesor y configuración (`auth_flow.dart`). Commit `0177d9d`. |
 
 ### Requerimientos pendientes / por cerrar
 
-| Requerimiento | Estado | Próximo paso sugerido |
-|---|---|---|
-| RF04 Roles y permisos finos por pantalla | Parcial | Revisión de autorizaciones por ruta y acciones críticas. |
-| RF06 Solicitud/almacenamiento de actividad económica | Parcial | Auditoría de campos y consistencia entre entrevista y detalle. |
-| RF11 Alta de múltiples obligaciones por formulario dinámico | Parcial | Pruebas de borde y edición/eliminación avanzada. |
-| RF16 Clasificación de riesgo completa | Parcial | Validar reglas de color/texto para todos los rangos extremos. |
-| RF18 Slider de plazo con presets | Parcial | QA cruzado por cada línea de crédito y límites. |
-| RF19 Selector tipo de crédito (6 opciones) | Parcial | Revisar consistencia entre entrevista, simulador y reportes. |
-| RF20 Fórmula de cuota francesa y validaciones límite | Parcial | Pruebas con tasas/plazos extremos y redondeos. |
-| RF27 Búsqueda + filtro CRM (optimización) | Parcial | Mover filtros avanzados a query server-side progresiva. |
-| RF28 Registro de comisiones | Parcial | Completar validaciones de negocio y evidencias en demo. |
-| RF29 Panel financiero asesor | Parcial | Verificar totales con casos reales y estados cerrados. |
-| RF30 Utilidad neta e historial consolidado | Parcial | Incorporar pruebas de conciliación de cifras. |
-| RF31 Estadísticas del asesor | Parcial | Refinar métricas por periodos y estados operativos. |
-| RF32 Cierre de sesión en todos los puntos requeridos | Parcial | Validación completa de UX y retorno seguro a login. |
+**Plan de cierre:** ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§15** y cierre Kevin **§16**. Pendiente bloque **`brandon-main`** (RF06, RF11, RF16, RF18–RF20) y merge (**§15.4**).
 
-> Nota: "Parcial" significa que existe implementación funcional, pero se recomienda cierre formal con pruebas de aceptación y checklist de demo.
+| Requerimiento | Estado | Rama | Próximo paso |
+|---|---|---|---|
+| RF06 Solicitud/almacenamiento de actividad económica | Parcial | **`brandon-main`** | Consistencia entrevista ↔ calculadora ↔ detalle asesor. |
+| RF11 Alta de múltiples obligaciones por formulario dinámico | Parcial | **`brandon-main`** | Edicion/eliminacion y pruebas de borde en entrevista paso 2. |
+| RF16 Clasificación de riesgo completa | Parcial | **`brandon-main`** | Colores/etiquetas en todos los rangos del score. |
+| RF18 Slider de plazo con presets | Parcial | **`brandon-main`** | QA por linea de credito en simulador. |
+| RF19 Selector tipo de crédito (6 opciones) | Parcial | **`brandon-main`** | Una sola lista en constantes y tres flujos. |
+| RF20 Fórmula de cuota francesa y validaciones límite | Parcial | **`brandon-main`** | Tasas/plazos extremos y redondeos en simulador. |
+
+> Nota: "Parcial" en esta tabla corresponde al cierre formal Brandon. Los RF de asesor/finanzas (RF04, RF27–RF32) quedaron **Realizado** en `kevin-main` (commit `0177d9d`).
 
 ---
 
