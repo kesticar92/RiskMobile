@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/auth_flow.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../core/utils/formatters.dart';
@@ -259,7 +261,24 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
       _includeArchived ||
       _followUpCRMFilter != _FollowUpCRMFilter.all;
 
+  /// RF27: índice de contactos solo cuando la búsqueda usa email o teléfono.
+  bool _crmNeedsContactIndex(String q) {
+    final t = q.trim().toLowerCase();
+    if (t.isEmpty) return false;
+    if (t.contains('@')) return true;
+    return RegExp(r'\d').hasMatch(t);
+  }
+
   Future<void> _ensureContactsLoaded(List<FinancialProfileModel> profiles) async {
+    if (!_crmNeedsContactIndex(_search)) {
+      if (_userByClientId.isNotEmpty || _contactsLoadedSig != null) {
+        setState(() {
+          _userByClientId = {};
+          _contactsLoadedSig = null;
+        });
+      }
+      return;
+    }
     final ids = profiles
         .map((p) => p.clientId)
         .where((id) => id.isNotEmpty)
@@ -341,10 +360,12 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
     int priorityN = 0;
     int inProgressN = 0;
     int approvedN = 0;
+    int rejectedN = 0;
     for (final p in filtered) {
       if (p.casePriority) priorityN++;
       if (AppConstants.isCaseInProgress(p.caseStatus)) inProgressN++;
       if (p.caseStatus == AppConstants.caseCreditApproved) approvedN++;
+      if (p.caseStatus == AppConstants.caseCreditRejected) rejectedN++;
       final fu = p.nextFollowUpAt;
       if (fu != null) {
         final d = _crmDateOnly(fu);
@@ -361,6 +382,7 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
       'Prioridad alta: $priorityN',
       'En proceso: $inProgressN',
       'Aprobados: $approvedN',
+      'Rechazados: $rejectedN',
       'Seguimiento vencido: $overdueFu',
       'Seguimiento hoy: $todayFu',
       pendingLine,
@@ -384,10 +406,12 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
     var priorityN = 0;
     var inProgressN = 0;
     var approvedN = 0;
+    var rejectedN = 0;
     for (final p in filtered) {
       if (p.casePriority) priorityN++;
       if (AppConstants.isCaseInProgress(p.caseStatus)) inProgressN++;
       if (p.caseStatus == AppConstants.caseCreditApproved) approvedN++;
+      if (p.caseStatus == AppConstants.caseCreditRejected) rejectedN++;
       final fu = p.nextFollowUpAt;
       if (fu != null) {
         final d = _crmDateOnly(fu);
@@ -436,6 +460,7 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                       _KpiChip(label: 'Seg. hoy', value: '$todayFu'),
                       _KpiChip(label: 'En proceso', value: '$inProgressN'),
                       _KpiChip(label: 'Aprobados', value: '$approvedN'),
+                      _KpiChip(label: 'Rechazados', value: '$rejectedN'),
                       _KpiChip(
                         label: 'Docs pend. revisión',
                         value: _pendingDocsBusy ? '…' : '$_pendingDocsCount',
@@ -471,17 +496,6 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
         final maxAmount = _parseAmount(_maxAmountCtrl.text);
         final now = DateTime.now();
         final allProfiles = snapshot.data ?? [];
-        final approvedCount = allProfiles
-            .where((p) => p.caseStatus == AppConstants.caseCreditApproved)
-            .length;
-        final inProgressCount = allProfiles
-            .where((p) => AppConstants.isCaseInProgress(p.caseStatus))
-            .length;
-        final total = allProfiles.length;
-        final approvedPct =
-            total > 0 ? ((approvedCount / total) * 100).round() : 0;
-        final inProgressPct =
-            total > 0 ? ((inProgressCount / total) * 100).round() : 0;
         final q = _search.toLowerCase().trim();
         final tagOptions = <String>{};
         for (final p in allProfiles) {
@@ -535,6 +549,29 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
             }
           });
 
+        final viewFiltered = widget.filterStatus != 'Todos' ||
+            _search.isNotEmpty ||
+            _hasAdvancedFilters;
+        final statsSource = viewFiltered ? filtered : allProfiles;
+        final total = statsSource.length;
+        final approvedCount = statsSource
+            .where((p) => p.caseStatus == AppConstants.caseCreditApproved)
+            .length;
+        final inProgressCount = statsSource
+            .where((p) => AppConstants.isCaseInProgress(p.caseStatus))
+            .length;
+        final rejectedCount = statsSource
+            .where((p) => p.caseStatus == AppConstants.caseCreditRejected)
+            .length;
+        final approvedPct =
+            total > 0 ? ((approvedCount / total) * 100).round() : 0;
+        final inProgressPct =
+            total > 0 ? ((inProgressCount / total) * 100).round() : 0;
+        final rejectedPct =
+            total > 0 ? ((rejectedCount / total) * 100).round() : 0;
+        final statsSubtitle =
+            viewFiltered ? 'Vista filtrada' : 'Cartera completa';
+
         _crmFilteredSigLive = _crmFilteredSig(filtered);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -549,14 +586,21 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                 child: Column(
                   children: [
-                    // Stats row
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Estadísticas — $statsSubtitle',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         _StatChip(
                           label: 'Total',
                           count: total,
                           color: AppColors.primaryBlue,
-                          subtitle: 'Base cartera',
+                          subtitle: statsSubtitle,
                         ),
                         const SizedBox(width: 8),
                         _StatChip(
@@ -565,12 +609,23 @@ class _ClientsTabState extends ConsumerState<_ClientsTab> {
                           color: AppColors.riskLow,
                           subtitle: '$approvedPct%',
                         ),
-                        const SizedBox(width: 8),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
                         _StatChip(
                           label: 'En proceso',
                           count: inProgressCount,
                           color: AppColors.riskMedium,
                           subtitle: '$inProgressPct%',
+                        ),
+                        const SizedBox(width: 8),
+                        _StatChip(
+                          label: 'Rechazados',
+                          count: rejectedCount,
+                          color: AppColors.riskHigh,
+                          subtitle: '$rejectedPct%',
                         ),
                       ],
                     ),
@@ -1364,166 +1419,361 @@ class _ScoreBadge extends StatelessWidget {
   }
 }
 
-// ---- Tab 2: Financials ----
-class _FinancialsTab extends ConsumerWidget {
+// ---- Tab 2: Financials (RF29–RF31) ----
+enum _CommissionPeriod { all, last30, last90 }
+
+class _FinancialsTab extends ConsumerStatefulWidget {
   const _FinancialsTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FinancialsTab> createState() => _FinancialsTabState();
+}
+
+class _FinancialsTabState extends ConsumerState<_FinancialsTab> {
+  _CommissionPeriod _period = _CommissionPeriod.all;
+
+  bool _commissionInPeriod(Map<String, dynamic> data) {
+    if (_period == _CommissionPeriod.all) return true;
+    final ts = data['createdAt'];
+    if (ts is! Timestamp) return true;
+    final days = _period == _CommissionPeriod.last30 ? 30 : 90;
+    return DateTime.now().difference(ts.toDate()).inDays <= days;
+  }
+
+  String _periodLabel() {
+    switch (_period) {
+      case _CommissionPeriod.all:
+        return 'Todo el historial';
+      case _CommissionPeriod.last30:
+        return 'Últimos 30 días';
+      case _CommissionPeriod.last90:
+        return 'Últimos 90 días';
+    }
+  }
+
+  Future<void> _copyFinancialSummary({
+    required double totalCommissions,
+    required double totalCosts,
+    required double profit,
+    required int portfolioTotal,
+    required int approved,
+    required int inProgress,
+    required int rejected,
+    required int commissionRows,
+  }) async {
+    final text = [
+      'RiskMobile — Panel financiero asesor',
+      'Periodo comisiones: ${_periodLabel()}',
+      'Cartera: $portfolioTotal casos',
+      'Aprobados: $approved | En proceso: $inProgress | Rechazados: $rejected',
+      'Comisiones: ${AppFormatters.currency(totalCommissions)}',
+      'Costos: ${AppFormatters.currency(totalCosts)}',
+      'Utilidad neta: ${AppFormatters.currency(profit)}',
+      'Registros en periodo: $commissionRows',
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Resumen financiero copiado.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.read(authServiceProvider);
     final advisorId = auth.currentUser?.uid ?? '';
+    final fs = ref.read(firestoreServiceProvider);
 
-    return StreamBuilder(
-      stream: ref.read(firestoreServiceProvider).streamAdvisorCommissions(advisorId),
-      builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
-        double totalCommissions = 0;
-        double totalCosts = 0;
-        for (final doc in docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          totalCommissions += (data['commissionAmount'] ?? 0).toDouble();
-          totalCosts += (data['costs'] ?? 0).toDouble();
-        }
-        final profit = totalCommissions - totalCosts;
+    return StreamBuilder<List<FinancialProfileModel>>(
+      stream: fs.streamAllProfiles(),
+      builder: (context, portfolioSnap) {
+        final profiles = portfolioSnap.data ?? [];
+        final portfolioTotal = profiles.length;
+        final approved = profiles
+            .where((p) => p.caseStatus == AppConstants.caseCreditApproved)
+            .length;
+        final inProgress = profiles
+            .where((p) => AppConstants.isCaseInProgress(p.caseStatus))
+            .length;
+        final rejected = profiles
+            .where((p) => p.caseStatus == AppConstants.caseCreditRejected)
+            .length;
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              Text('Resumen financiero',
-                  style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 16),
-              // Summary cards
-              Row(
+        return StreamBuilder<QuerySnapshot>(
+          stream: fs.streamAdvisorCommissions(advisorId),
+          builder: (context, snapshot) {
+            final allDocs = snapshot.data?.docs ?? [];
+            final docs = allDocs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return _commissionInPeriod(data);
+            }).toList();
+
+            double totalCommissions = 0;
+            double totalCosts = 0;
+            for (final doc in docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              totalCommissions += (data['commissionAmount'] ?? 0).toDouble();
+              totalCosts += (data['costs'] ?? 0).toDouble();
+            }
+            final profit = totalCommissions - totalCosts;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _FinCard(
-                    label: 'Comisiones totales',
-                    value: AppFormatters.currency(totalCommissions),
-                    icon: Icons.payments_outlined,
-                    color: AppColors.riskLow,
-                  ),
-                  const SizedBox(width: 12),
-                  _FinCard(
-                    label: 'Costos operativos',
-                    value: AppFormatters.currency(totalCosts),
-                    icon: Icons.remove_circle_outline,
-                    color: AppColors.riskMedium,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: AppColors.advisorGradient,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.trending_up, color: Colors.white, size: 28),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Utilidad neta',
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
-                                fontSize: 13)),
-                        Text(
-                          AppFormatters.currency(profit),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
-                          ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Panel financiero',
+                          style: Theme.of(context).textTheme.headlineSmall,
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text('Historial de comisiones',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              if (docs.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                      ),
+                      IconButton(
+                        tooltip: 'Copiar resumen',
+                        onPressed: () => _copyFinancialSummary(
+                          totalCommissions: totalCommissions,
+                          totalCosts: totalCosts,
+                          profit: profit,
+                          portfolioTotal: portfolioTotal,
+                          approved: approved,
+                          inProgress: inProgress,
+                          rejected: rejected,
+                          commissionRows: docs.length,
+                        ),
+                        icon: const Icon(Icons.copy_outlined),
+                      ),
+                    ],
                   ),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.receipt_long_outlined,
-                            size: 40, color: AppColors.textLight),
-                        const SizedBox(height: 8),
-                        Text('Sin comisiones registradas',
-                            style:
-                                TextStyle(color: AppColors.textSecondary)),
-                      ],
-                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cartera asignada',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                )
-              else
-                ...docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _FinCard(
+                        label: 'Casos totales',
+                        value: '$portfolioTotal',
+                        icon: Icons.folder_shared_outlined,
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 12),
+                      _FinCard(
+                        label: 'Aprobados',
+                        value: '$approved',
+                        icon: Icons.verified_outlined,
+                        color: AppColors.riskLow,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _FinCard(
+                        label: 'En proceso',
+                        value: '$inProgress',
+                        icon: Icons.hourglass_top_outlined,
+                        color: AppColors.riskMedium,
+                      ),
+                      const SizedBox(width: 12),
+                      _FinCard(
+                        label: 'Rechazados',
+                        value: '$rejected',
+                        icon: Icons.cancel_outlined,
+                        color: AppColors.riskHigh,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Comisiones — ${_periodLabel()}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Todo'),
+                        selected: _period == _CommissionPeriod.all,
+                        onSelected: (_) =>
+                            setState(() => _period = _CommissionPeriod.all),
+                      ),
+                      ChoiceChip(
+                        label: const Text('30 días'),
+                        selected: _period == _CommissionPeriod.last30,
+                        onSelected: (_) =>
+                            setState(() => _period = _CommissionPeriod.last30),
+                      ),
+                      ChoiceChip(
+                        label: const Text('90 días'),
+                        selected: _period == _CommissionPeriod.last90,
+                        onSelected: (_) =>
+                            setState(() => _period = _CommissionPeriod.last90),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _FinCard(
+                        label: 'Comisiones',
+                        value: AppFormatters.currency(totalCommissions),
+                        icon: Icons.payments_outlined,
+                        color: AppColors.riskLow,
+                      ),
+                      const SizedBox(width: 12),
+                      _FinCard(
+                        label: 'Costos',
+                        value: AppFormatters.currency(totalCosts),
+                        icon: Icons.remove_circle_outline,
+                        color: AppColors.riskMedium,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border, width: 0.5),
+                      gradient: AppColors.advisorGradient,
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.riskLow.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(Icons.check_circle_outline,
-                              color: AppColors.riskLow, size: 18),
-                        ),
-                        const SizedBox(width: 12),
+                        const Icon(Icons.trending_up,
+                            color: Colors.white, size: 28),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(data['clientName'] ?? '',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14)),
                               Text(
-                                'Crédito: ${AppFormatters.compactCurrency((data['creditAmount'] ?? 0).toDouble())}',
+                                'Utilidad neta',
                                 style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary),
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                AppFormatters.currency(profit),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        Text(
-                          AppFormatters.currency(
-                              (data['commissionAmount'] ?? 0).toDouble()),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.riskLow,
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.primaryBlueDark,
                           ),
+                          onPressed: () => context.push(AppRoutes.payments),
+                          child: const Text('Registrar'),
                         ),
                       ],
                     ),
-                  );
-                }),
-            ],
-          ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Historial (${docs.length})',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (docs.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceCard,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(Icons.receipt_long_outlined,
+                                size: 40, color: AppColors.textLight),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Sin comisiones en este periodo',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ...docs.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final commission =
+                          (data['commissionAmount'] ?? 0).toDouble();
+                      final costs = (data['costs'] ?? 0).toDouble();
+                      final rowProfit = commission - costs;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border:
+                              Border.all(color: AppColors.border, width: 0.5),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.riskLow.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.check_circle_outline,
+                                  color: AppColors.riskLow, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    data['clientName'] ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Crédito: ${AppFormatters.compactCurrency((data['creditAmount'] ?? 0).toDouble())} · Utilidad: ${AppFormatters.currency(rowProfit)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              AppFormatters.currency(commission),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.riskLow,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -1650,10 +1900,7 @@ class _ProfileTab extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () async {
-                await ref.read(authServiceProvider).signOut();
-                if (context.mounted) context.go(AppRoutes.login);
-              },
+              onPressed: () => signOutWithConfirmation(context, ref),
               icon: const Icon(Icons.logout, color: AppColors.riskHigh),
               label: const Text('Cerrar sesión',
                   style: TextStyle(color: AppColors.riskHigh)),
