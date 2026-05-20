@@ -76,7 +76,7 @@ class RiskCalculator {
     if (powVal == 1) return 0;
     final pmt = principal * rate * powVal / (powVal - 1);
     if (!pmt.isFinite || pmt.isNaN) return 0;
-    return max(0, pmt);
+    return max(0, pmt.roundToDouble());
   }
 
   /// Nivel de endeudamiento en porcentaje

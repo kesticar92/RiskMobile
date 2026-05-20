@@ -1,6 +1,6 @@
 # Resumen para exposicion por ramas
 
-**Ultima actualizacion:** **17 de mayo de 2026**. Incluye **§13** (**RF-K20–K24**), **§14** (**RF-B15–B19**), **§15** plan de cierre, **§16** (**RF04, RF27–RF32** cerrados en `kevin-main`, commit `0177d9d`). Pendiente cierre **Brandon** (RF06, RF11, RF16, RF18–RF20) y merge (**§15.4**).
+**Ultima actualizacion:** **17 de mayo de 2026**. Proyecto unificado: **§13–§17** (oleadas y cierres Kevin/Brandon), **§18** (merge entre ramas). Commits: `0177d9d`, `9901f2c`, `126fc54`.
 
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
@@ -852,9 +852,10 @@ Complementan **RF-B10–B14** (vista de documentos ya en la nube) con control op
 |--------|----------|--------|
 | Oleadas **RF-K1–K24** (`kevin-main`) | 24 | Implementados |
 | Oleadas **RF-B1–B19** (`brandon-main`) | 19 | Implementados |
-| RF README **Parcial** por cerrar | **6** | Solo bloque **`brandon-main`** (ver **15.3**) |
-| Cierre **`kevin-main`** (RF04, RF27–RF32) | **7** | **Realizado** — ver **§16** (`0177d9d`) |
-| Merge cruzado | **2** acciones | **Después** del cierre Brandon (**15.4**) |
+| RF README **Parcial** por cerrar | **0** | Cerrados en **§16** y **§17** |
+| Cierre **`kevin-main`** (RF04, RF27–RF32) | **7** | **Realizado** — **§16** (`0177d9d`) |
+| Cierre **`brandon-main`** (RF06, RF11, RF16, RF18–RF20, RF04, RF32) | **8** | **Realizado** — **§17** (`9901f2c`) |
+| Merge cruzado | **2** acciones | **Completado** — **§18** |
 
 ### 15.2) Rama `kevin-main` — cierre asesor / CRM / financiero — **COMPLETADO (17/05/2026)**
 
@@ -874,9 +875,9 @@ Complementan **RF-B10–B14** (vista de documentos ya en la nube) con control op
 
 **Conteo exclusivo Kevin:** **5** RF + **2** compartidos (RF04, RF32) — **cerrados** en `kevin-main`.
 
-### 15.3) Rama `brandon-main` — cierre cliente / entrevista / simulador / documentos
+### 15.3) Rama `brandon-main` — cierre cliente / entrevista / simulador / documentos — **COMPLETADO (17/05/2026)**
 
-**Responsable:** Brandon. **Commits sugeridos:** `feat(brandon): cierre RF06…`.
+**Responsable:** Brandon. **Commit:** `9901f2c` — `feat(brandon-main): cerrar RF04 RF06 RF11 RF16 RF18-20 RF32`. Detalle en **§17**.
 
 | ID README | Nombre | Objetivo de cierre | Archivos / area previstos | Criterio de aceptacion (demo) |
 |-----------|--------|--------------------|---------------------------|-------------------------------|
@@ -914,10 +915,10 @@ Complementan **RF-B10–B14** (vista de documentos ya en la nube) con control op
 ### 15.5) Checklist de culminacion (exposicion)
 
 - [x] RF27–RF31 + RF04 + RF32 cerrados en `kevin-main` + README actualizado (**§16**, `0177d9d`).
-- [ ] RF06, RF11, RF16, RF18–RF20 cerrados en `brandon-main` + README actualizado.
-- [x] Documentacion Kevin: este archivo y `RESUMEN_ENTREGABLE.md` §17.1.
-- [ ] Merge **15.4** ejecutado y probado.
-- [ ] Demo unificada: cliente (documentos + entrevista + simulador) y asesor (CRM + comisiones + chat).
+- [x] RF06, RF11, RF16, RF18–RF20 + RF04 + RF32 cerrados en `brandon-main` (`9901f2c`).
+- [x] Documentacion Kevin y Brandon actualizada.
+- [x] Merge **§18** ejecutado en `kevin-main` y `brandon-main`.
+- [ ] Demo unificada post-merge (cliente + asesor).
 
 ### 15.6) Opcional — sexta oleada (solo si el docente pide mas entregables numerados)
 
@@ -967,5 +968,62 @@ No bloquea el cierre de los 13 **Parcial**. Si se aprueba:
 3. Tab **Financiero** → filtro 30 dias, copiar resumen, registrar comision vinculada a caso (**RF29**, **RF30**, **RF28**).
 4. Perfil o **Configuracion** → cerrar sesion con confirmacion (**RF32**).
 
-> Tras merge desde `brandon-main`, validar que RF-B15–B19 y el cierre Brandon no rompen las rutas protegidas.
+---
+
+## 17) Cierre `brandon-main` — **RF04, RF06, RF11, RF16, RF18–RF20, RF32** — **17/05/2026**
+
+**Estado:** **implementados** en codigo en **`brandon-main`**. Commit de referencia al subir: `feat(brandon-main): cerrar RF04 RF06 RF11 RF16 RF18-20 RF32`.
+
+### 17.1) Tabla resumen (README ↔ codigo)
+
+| ID README | Nombre | Comportamiento entregado |
+|-----------|--------|--------------------------|
+| **RF04** | Roles (cliente) | `ClientRouteGate` en home, entrevista, documentos, calculadora, simulador, historial; asesor redirige al CRM. |
+| **RF06** | Actividad economica | Limites 600 meses / ingreso max; mismos campos en calculadora y resumen asesor. |
+| **RF11** | Obligaciones | Modal agregar/editar; saldo en tarjeta; validacion de montos. |
+| **RF16** | Clasificacion riesgo | `riskLabelForScore`, `riskBandDescription`, colores via `AppConstants`. |
+| **RF18** | Plazo y presets | Presets 6M, 1A, 2A, 3A, 5A, 7A filtrados por linea; plazo en pasos de 6 meses. |
+| **RF19** | Tipo de credito | 6 opciones en `AppConstants.creditTypes`; visible en historial y copiar resumen. |
+| **RF20** | Cuota francesa | PMT redondeado; banner si cuota > capacidad disponible. |
+| **RF32** | Cierre de sesion | Confirmacion en home, entrevista, documentos y configuracion. |
+
+### 17.2) Archivos tocados
+
+| Archivo | Cambio |
+|---------|--------|
+| `lib/core/constants/app_constants.dart` | Limites RF06, helpers RF16, presets RF18. |
+| `lib/core/constants/credit_line_params.dart` | Presets y snap de plazo RF18. |
+| `lib/core/router/role_guard.dart`, `auth_flow.dart`, `app_router.dart` | RF04, RF32. |
+| `lib/features/interview/presentation/screens/interview_screen.dart` | RF06, RF11, RF32. |
+| `lib/features/calculator/presentation/screens/calculator_screen.dart` | RF06, RF16. |
+| `lib/features/simulator/presentation/screens/simulator_screen.dart` | RF18, RF19, RF20. |
+| `lib/features/history/.../evaluations_history_screen.dart` | RF19. |
+| `lib/features/advisor/.../client_detail_screen.dart` | RF06, RF19. |
+| `lib/features/auth/.../client_home_screen.dart`, `documents_screen.dart`, `settings_screen.dart` | RF32. |
+
+### 17.3) Demo sugerida (cliente)
+
+1. Entrevista: actividad con limites; agregar y **editar** obligacion (**RF06**, **RF11**).
+2. Calculadora: score con descripcion de banda (**RF16**).
+3. Simulador: presets 6M–7A, aviso de cuota alta (**RF18**, **RF19**, **RF20**).
+4. Cerrar sesion desde home o documentos (**RF32**).
+
+### 17.4) Integracion entre ramas
+
+Ver **§18** (merge completado).
+
+---
+
+## 18) Merge `kevin-main` ↔ `brandon-main` — **17/05/2026**
+
+**Estado:** **completado** en ambas ramas tras resolver conflictos en documentacion.
+
+| Rama | Accion | Resultado |
+|------|--------|-----------|
+| `kevin-main` | `merge origin/brandon-main` | Codigo unificado: CRM Kevin + cliente/documentos Brandon |
+| `brandon-main` | `merge origin/kevin-main` | Misma base de codigo; historial alineado |
+
+**Incluye en el arbol:** RF-K1–K24, RF-B1–B19, cierre README RF04–RF32.
+
+**Siguiente:** `dart analyze` y demo cliente + asesor en cualquiera de las dos ramas (codigo equivalente tras merge).
 

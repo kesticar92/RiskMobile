@@ -169,28 +169,23 @@ Esta sección consolida el avance histórico por requerimiento, con la mejor fec
 | RF36 Recuperar contraseña | Realizado | Sesión inicial (fecha no registrada) | Pantalla y flujo de restablecimiento. |
 | RF37 Historial evaluaciones | Realizado | Sesión previa + 16/04/2026 | Historial y consulta documental por caso. |
 | RF38 Validación documental asesor | Realizado | Sesión previa (fecha no registrada) | Estados de revisión documental y notificación al cliente. |
-| RF04 Roles y permisos finos por pantalla | Realizado | 17/05/2026 · `kevin-main` | `AdvisorRouteGate` / `ClientRouteGate` en rutas CRM, cliente, pagos e historial (`role_guard.dart`, `app_router.dart`). |
-| RF27 Búsqueda + filtro CRM (optimización) | Realizado | 17/05/2026 · `kevin-main` | Índice de contactos (`getUsersByIds`) solo si la búsqueda usa email o teléfono; estadísticas alineadas con vista filtrada. |
-| RF28 Registro de comisiones | Realizado | 17/05/2026 · `kevin-main` | Vínculo opcional a caso, validaciones, alerta costos > comisión (`payments_screen.dart`). |
-| RF29 Panel financiero asesor | Realizado | 17/05/2026 · `kevin-main` | Tab **Financiero**: cartera (total/aprobados/en proceso/rechazados) + comisiones por periodo. |
-| RF30 Utilidad neta e historial consolidado | Realizado | 17/05/2026 · `kevin-main` | Utilidad neta en panel y por fila de historial; copiar resumen al portapapeles. |
-| RF31 Estadísticas del asesor | Realizado | 17/05/2026 · `kevin-main` | Chips Total/Aprobados/En proceso/Rechazados según cartera o vista filtrada; KPIs con rechazados. |
-| RF32 Cierre de sesión en todos los puntos requeridos | Realizado | 17/05/2026 · `kevin-main` | `signOutWithConfirmation` en perfil asesor y configuración (`auth_flow.dart`). Commit `0177d9d`. |
+| RF04 Roles y permisos finos por pantalla | Realizado | 17/05/2026 | `AdvisorRouteGate` / `ClientRouteGate` (`role_guard.dart`, `app_router.dart`). |
+| RF06 Solicitud/almacenamiento de actividad económica | Realizado | 17/05/2026 | Límites entrevista; actividad en calculadora y detalle asesor. |
+| RF11 Alta de múltiples obligaciones por formulario dinámico | Realizado | 17/05/2026 | Agregar, editar y eliminar obligaciones (paso 2). |
+| RF16 Clasificación de riesgo completa | Realizado | 17/05/2026 | `riskLabelForScore`, `riskBandDescription`, colores unificados. |
+| RF18 Slider de plazo con presets | Realizado | 17/05/2026 | Presets 6M–7A por línea; plazo en múltiplos de 6 meses. |
+| RF19 Selector tipo de crédito (6 opciones) | Realizado | 17/05/2026 | `AppConstants.creditTypes` en entrevista, simulador, historial y CRM. |
+| RF20 Fórmula de cuota francesa y validaciones límite | Realizado | 17/05/2026 | Cuota redondeada; aviso si supera capacidad disponible. |
+| RF27 Búsqueda + filtro CRM (optimización) | Realizado | 17/05/2026 | Índice contactos bajo demanda; estadísticas por vista filtrada. |
+| RF28 Registro de comisiones | Realizado | 17/05/2026 | Vínculo a caso, validaciones, panel e historial (`payments_screen.dart`). |
+| RF29 Panel financiero asesor | Realizado | 17/05/2026 | Tab Financiero con cartera y comisiones por periodo. |
+| RF30 Utilidad neta e historial consolidado | Realizado | 17/05/2026 | Utilidad neta consolidada; copiar resumen al portapapeles. |
+| RF31 Estadísticas del asesor | Realizado | 17/05/2026 | Chips y KPIs alineados con cartera o vista filtrada. |
+| RF32 Cierre de sesión en todos los puntos requeridos | Realizado | 17/05/2026 | `signOutWithConfirmation` (asesor y cliente). |
 
 ### Requerimientos pendientes / por cerrar
 
-**Plan de cierre:** ver `RESUMEN_PARA_EXPOSICION_RAMOS.md` **§15** y cierre Kevin **§16**. Pendiente bloque **`brandon-main`** (RF06, RF11, RF16, RF18–RF20) y merge (**§15.4**).
-
-| Requerimiento | Estado | Rama | Próximo paso |
-|---|---|---|---|
-| RF06 Solicitud/almacenamiento de actividad económica | Parcial | **`brandon-main`** | Consistencia entrevista ↔ calculadora ↔ detalle asesor. |
-| RF11 Alta de múltiples obligaciones por formulario dinámico | Parcial | **`brandon-main`** | Edicion/eliminacion y pruebas de borde en entrevista paso 2. |
-| RF16 Clasificación de riesgo completa | Parcial | **`brandon-main`** | Colores/etiquetas en todos los rangos del score. |
-| RF18 Slider de plazo con presets | Parcial | **`brandon-main`** | QA por linea de credito en simulador. |
-| RF19 Selector tipo de crédito (6 opciones) | Parcial | **`brandon-main`** | Una sola lista en constantes y tres flujos. |
-| RF20 Fórmula de cuota francesa y validaciones límite | Parcial | **`brandon-main`** | Tasas/plazos extremos y redondeos en simulador. |
-
-> Nota: "Parcial" en esta tabla corresponde al cierre formal Brandon. Los RF de asesor/finanzas (RF04, RF27–RF32) quedaron **Realizado** en `kevin-main` (commit `0177d9d`).
+Ninguno en el alcance actual del README. Tras merge **`kevin-main`** + **`brandon-main`** (17/05/2026), ver **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §18**.
 
 ---
 

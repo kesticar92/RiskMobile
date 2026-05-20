@@ -1,6 +1,6 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
-**Última actualización del documento:** **17 de mayo de 2026**. Ver **§16** (oleadas mayo), **§17** (cierre: Kevin **realizado** `0177d9d`; Brandon pendiente). Quinta oleada: RF-K20–K24, RF-B15–B19. Cierre asesor: **§16** de `RESUMEN_PARA_EXPOSICION_RAMOS.md`.
+**Última actualización del documento:** **17 de mayo de 2026**. Proyecto unificado tras merge: **§16–§18** en `RESUMEN_PARA_EXPOSICION_RAMOS.md`. Commits `0177d9d`, `9901f2c`.
 
 Documento para exposición y referencia del equipo.
 
@@ -439,46 +439,24 @@ Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
 
 ---
 
-## 17. Plan de cierre del proyecto — **17/05/2026**
+## 17. Cierre por rama — **17/05/2026**
 
-Documentacion completa: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §15–§16** y tabla en `README.md`.
-
-**Orden:** (1) documentacion → (2) implementacion por rama → (3) merge (**§15.4**).
-
-### 17.1 `kevin-main` — **REALIZADO** (`0177d9d`, 17/05/2026)
-
-| ID | Tema | Evidencia breve |
-|----|------|-----------------|
-| RF27 | Optimizacion CRM | Indice contactos bajo demanda; estadisticas por vista filtrada. |
-| RF28 | Comisiones | `payments_screen.dart` con validaciones y vinculo a caso. |
-| RF29 | Panel financiero | Tab Financiero con cartera y periodos 30/90/todo. |
-| RF30 | Utilidad neta | Utilidad consolidada + por registro; copiar resumen. |
-| RF31 | Estadisticas asesor | Chips + KPIs con rechazados. |
-| RF04 | Roles (router) | `role_guard.dart` + rutas en `app_router.dart`. |
-| RF32 | Logout | `auth_flow.dart` en perfil asesor y configuracion. |
-
-Detalle de demo: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §16**.
-
-### 17.2 `brandon-main` — 6 RF exclusivos (pendiente)
+### 17.1 `kevin-main` — **REALIZADO** (`0177d9d`)
 
 | ID | Tema |
 |----|------|
-| RF06 | Actividad economica |
-| RF11 | Obligaciones dinamicas |
-| RF16 | Clasificacion riesgo |
-| RF18 | Slider plazo simulador |
-| RF19 | Tipo de credito (6 opciones) |
-| RF20 | Cuota francesa |
+| RF27–RF31, RF04, RF32 | CRM, finanzas, roles, logout asesor |
 
-> RF04 y RF32 quedaron cubiertos en `kevin-main` (guards + logout en configuracion). Brandon puede revalidar flujos cliente tras merge.
+Detalle: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §16**.
 
-### 17.3 Oleadas ya implementadas (referencia)
+### 17.2 `brandon-main` — **REALIZADO** (`9901f2c`)
 
-| Rama | Oleadas |
-|------|---------|
-| `kevin-main` | RF-K1–K24 (incl. K20–K24 en resumen §13) |
-| `brandon-main` | RF-B1–B19 (§14 del resumen de exposicion) |
+| ID | Tema |
+|----|------|
+| RF06, RF11, RF16, RF18–RF20, RF04, RF32 | Cliente, entrevista, simulador |
 
-### 17.4 Merge (fase posterior)
+Detalle: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §17**.
 
-Ejecutar cuando Brandon cierre RF06, RF11, RF16, RF18–RF20. Ver checklist **§15.5** en `RESUMEN_PARA_EXPOSICION_RAMOS.md` (Kevin ya marcado).
+### 17.3 Merge entre ramas — **§18**
+
+Merge bidireccional completado; codigo unificado en `kevin-main` y `brandon-main`.

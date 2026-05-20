@@ -141,7 +141,16 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       ..writeln('Cliente: ${p.clientName}')
       ..writeln('Estado: ${p.caseStatus}')
       ..writeln('Actividad: ${p.economicActivity}')
+    if (p.contractType != null && p.contractType!.isNotEmpty) {
+      b.writeln('Contrato: ${p.contractType}');
+    }
+    b
+      ..writeln('Antigüedad: ${p.seniorityMonths} meses')
       ..writeln('Ingresos: ${AppFormatters.currency(p.monthlyIncome)}')
+    if (p.desiredCreditType != null && p.desiredCreditType!.isNotEmpty) {
+      b.writeln('Producto: ${p.desiredCreditType}');
+    }
+    b
       ..writeln('Cuotas: ${AppFormatters.currency(p.totalMonthlyPayments)}')
       ..writeln('Capacidad disp.: ${AppFormatters.currency(p.availableCapacity)}')
       ..writeln('Monto deseado: ${AppFormatters.currency(p.desiredAmount)}')

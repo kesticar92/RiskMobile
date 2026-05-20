@@ -8,8 +8,10 @@ import 'package:uuid/uuid.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/auth_flow.dart';
 import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../shared/widgets/gradient_button.dart';
 import '../../../../shared/widgets/glass_card.dart';
@@ -175,6 +177,19 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
                       ],
                     ),
                   ),
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'logout') {
+                        signOutWithConfirmation(context, ref);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'logout',
+                        child: Text('Cerrar sesión'),
+                      ),
+                    ],
+                  ),
                   SmoothPageIndicator(
                     controller: _pageController,
                     count: _totalPages,
@@ -282,7 +297,9 @@ class _InterviewScreenState extends ConsumerState<InterviewScreen> {
       case 0:
         return _selectedActivity != null &&
             income >= 0 &&
+            income <= AppConstants.maxMonthlyIncome &&
             seniority >= 0 &&
+            seniority <= AppConstants.maxSeniorityMonths &&
             (!needsContract || _selectedContractType != null);
       case 1:
         if (!_hasObligations) return true;
@@ -433,6 +450,7 @@ class _ActivityPage extends StatelessWidget {
               labelText: '¿Cuántos meses llevas en tu actividad?',
               prefixIcon: Icon(Icons.timeline_outlined),
               hintText: '0',
+              helperText: 'Máximo ${AppConstants.maxSeniorityMonths} meses',
             ),
           ),
           const SizedBox(height: 18),
@@ -442,11 +460,13 @@ class _ActivityPage extends StatelessWidget {
             controller: incomeCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '¿Cuánto ganas al mes?',
-              prefixIcon: Icon(Icons.attach_money),
+              prefixIcon: const Icon(Icons.attach_money),
               hintText: '0',
               prefixText: '\$ ',
+              helperText:
+                  'Máximo ${AppFormatters.compactCurrency(AppConstants.maxMonthlyIncome.toDouble())}',
             ),
           ),
           const SizedBox(height: 24),
@@ -508,19 +528,32 @@ class _ObligationsPageState extends State<_ObligationsPage> {
     // vía `onObligationsChanged` desde el padre.
   }
 
-  void _addObligation() {
+  void _openObligationForm({FinancialObligation? initial, int? replaceIndex}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddObligationSheet(
-        onAdd: (ob) {
-          setState(() => _localList.add(ob));
-          widget.onObligationsChanged(List<FinancialObligation>.from(_localList));
+      builder: (_) => _ObligationFormSheet(
+        initial: initial,
+        onSubmit: (ob) {
+          setState(() {
+            if (replaceIndex != null &&
+                replaceIndex >= 0 &&
+                replaceIndex < _localList.length) {
+              _localList[replaceIndex] = ob;
+            } else {
+              _localList.add(ob);
+            }
+          });
+          widget.onObligationsChanged(
+            List<FinancialObligation>.from(_localList),
+          );
         },
       ),
     );
   }
+
+  void _addObligation() => _openObligationForm();
 
   @override
   Widget build(BuildContext context) {
@@ -586,6 +619,17 @@ class _ObligationsPageState extends State<_ObligationsPage> {
                         '${ob.entity}_${ob.creditType}_${ob.monthlyPayment}_$i',
                   ),
                   obligation: ob,
+                  onEdit: () {
+                    final idx = ob.clientRowId != null
+                        ? _localList.indexWhere(
+                            (x) => x.clientRowId == ob.clientRowId,
+                          )
+                        : i;
+                    _openObligationForm(
+                      initial: ob,
+                      replaceIndex: idx >= 0 ? idx : i,
+                    );
+                  },
                   onRemove: () {
                     setState(() {
                       if (ob.clientRowId != null) {
@@ -660,12 +704,14 @@ class _ObligationsPageState extends State<_ObligationsPage> {
 
 class _ObligationTile extends StatelessWidget {
   final FinancialObligation obligation;
+  final VoidCallback onEdit;
   final VoidCallback onRemove;
   final ValueChanged<FinancialObligation> onUpdate;
 
   const _ObligationTile({
     super.key,
     required this.obligation,
+    required this.onEdit,
     required this.onRemove,
     required this.onUpdate,
   });
@@ -715,12 +761,19 @@ class _ObligationTile extends StatelessWidget {
                         style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 14)),
                     Text(
-                      '${obligation.creditType} • \$${obligation.monthlyPayment.toStringAsFixed(0)}/mes',
+                      '${obligation.creditType} • \$${obligation.monthlyPayment.toStringAsFixed(0)}/mes'
+                      '${obligation.balance != null && obligation.balance! > 0 ? ' · Saldo: \$${obligation.balance!.toStringAsFixed(0)}' : ''}',
                       style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined,
+                    size: 18, color: AppColors.primaryBlue),
+                onPressed: onEdit,
+                tooltip: 'Editar',
               ),
               IconButton(
                 icon: const Icon(Icons.close,
@@ -764,22 +817,47 @@ class _ObligationTile extends StatelessWidget {
   }
 }
 
-class _AddObligationSheet extends StatefulWidget {
-  final ValueChanged<FinancialObligation> onAdd;
-  const _AddObligationSheet({required this.onAdd});
+class _ObligationFormSheet extends StatefulWidget {
+  final FinancialObligation? initial;
+  final ValueChanged<FinancialObligation> onSubmit;
+
+  const _ObligationFormSheet({this.initial, required this.onSubmit});
 
   @override
-  State<_AddObligationSheet> createState() => _AddObligationSheetState();
+  State<_ObligationFormSheet> createState() => _ObligationFormSheetState();
 }
 
-class _AddObligationSheetState extends State<_AddObligationSheet> {
+class _ObligationFormSheetState extends State<_ObligationFormSheet> {
   final _entityCtrl = TextEditingController();
   final _paymentCtrl = TextEditingController();
   final _balanceCtrl = TextEditingController();
-  String _type = AppConstants.creditTypes.first;
+  late String _type;
+
+  @override
+  void initState() {
+    super.initState();
+    final o = widget.initial;
+    _type = o?.creditType ?? AppConstants.creditTypes.first;
+    if (o != null) {
+      _entityCtrl.text = o.entity;
+      _paymentCtrl.text = o.monthlyPayment.toStringAsFixed(0);
+      if (o.balance != null && o.balance! > 0) {
+        _balanceCtrl.text = o.balance!.toStringAsFixed(0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _entityCtrl.dispose();
+    _paymentCtrl.dispose();
+    _balanceCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.initial != null;
     return Container(
       padding: EdgeInsets.only(
         left: 24, right: 24, top: 24,
@@ -803,7 +881,7 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('Agregar obligación',
+          Text(isEdit ? 'Editar obligación' : 'Agregar obligación',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 20),
           TextFormField(
@@ -849,13 +927,14 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
           ),
           const SizedBox(height: 24),
           GradientButton(
-            label: 'Agregar',
+            label: isEdit ? 'Guardar' : 'Agregar',
             onPressed: () {
               final entity = _entityCtrl.text.trim();
               final payment = double.tryParse(_paymentCtrl.text) ?? 0;
-              final balance = _balanceCtrl.text.trim().isEmpty
+              final balanceRaw = _balanceCtrl.text.trim();
+              final balance = balanceRaw.isEmpty
                   ? null
-                  : (double.tryParse(_balanceCtrl.text) ?? 0);
+                  : (double.tryParse(balanceRaw) ?? 0);
               if (entity.length < 2 || payment <= 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -865,14 +944,24 @@ class _AddObligationSheetState extends State<_AddObligationSheet> {
                 );
                 return;
               }
+              if (balance != null && balance < 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('El saldo no puede ser negativo.'),
+                  ),
+                );
+                return;
+              }
               final ob = FinancialObligation(
                 entity: entity,
                 creditType: _type,
                 monthlyPayment: payment,
-                balance: balance,
-                clientRowId: const Uuid().v4(),
+                balance: balance != null && balance > 0 ? balance : null,
+                bankExtractFileName: widget.initial?.bankExtractFileName,
+                clientRowId:
+                    widget.initial?.clientRowId ?? const Uuid().v4(),
               );
-              widget.onAdd(ob);
+              widget.onSubmit(ob);
               Navigator.pop(context);
             },
             icon: Icons.check,
