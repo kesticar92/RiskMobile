@@ -1,6 +1,6 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
-**Última actualización del documento:** **8 de mayo de 2026**. Ver **§16** (RF-K15–K19 y RF-B10–B14 implementados + integración entre ramas). Ver **§15** para la iteración abril 2026 (RF-K5–K14, RF-B5–B9, ramas y merge).
+**Última actualización del documento:** **17 de mayo de 2026**. Ver **§16** (oleadas mayo), **§17** (cierre Brandon en `brandon-main`). Kevin: `kevin-main` (`0177d9d`).
 
 Documento para exposición y referencia del equipo.
 
@@ -436,3 +436,20 @@ Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
 - Validación rápida de integración:
   - `kevin-main..brandon-main` muestra únicamente el commit propio de Brandon (`315c79d`).
   - `brandon-main..kevin-main` muestra únicamente el commit propio de Kevin (`183ce18`) antes de integrar en Kevin la línea de Brandon.
+
+---
+
+## 17. Cierre `brandon-main` — **17/05/2026**
+
+| ID | Tema | Evidencia breve |
+|----|------|-----------------|
+| RF06 | Actividad economica | Limites entrevista; card en calculadora. |
+| RF11 | Obligaciones | Editar obligacion en paso 2. |
+| RF16 | Riesgo 4 niveles | `riskLabelForScore` + descripcion en calculadora. |
+| RF18 | Presets plazo | 6M–7A por linea; snap cada 6 meses. |
+| RF19 | 6 tipos credito | Historial + resumen asesor. |
+| RF20 | Cuota francesa | Redondeo + aviso capacidad. |
+| RF04 | Roles cliente | `ClientRouteGate`. |
+| RF32 | Logout cliente | Home, entrevista, documentos, settings. |
+
+Detalle: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §17**. Merge con `kevin-main`: **§17.4**.

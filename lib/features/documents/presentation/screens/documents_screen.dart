@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/auth_flow.dart';
 import '../../../../core/router/navigation_helpers.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
@@ -907,6 +908,19 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                       'Mis documentos',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'logout') {
+                        signOutWithConfirmation(context, ref);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'logout',
+                        child: Text('Cerrar sesión'),
+                      ),
+                    ],
                   ),
                 ],
               ),

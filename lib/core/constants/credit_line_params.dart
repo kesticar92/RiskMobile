@@ -93,4 +93,41 @@ class CreditLineParamsRegistry {
       AppConstants.maxInterestRate,
     );
   }
+
+  /// RF18: presets 6M, 1A, 2A, 3A, 5A, 7A dentro del rango de la línea.
+  static List<int> quickTermPresetsForLine(String creditType) {
+    final p = forLine(creditType);
+    return AppConstants.globalTermPresetsMonths
+        .where((m) => m >= p.minTermMonths && m <= p.maxTermMonths)
+        .toList();
+  }
+
+  static String presetLabel(int months) {
+    switch (months) {
+      case 6:
+        return '6M';
+      case 12:
+        return '1A';
+      case 24:
+        return '2A';
+      case 36:
+        return '3A';
+      case 60:
+        return '5A';
+      case 84:
+        return '7A';
+      default:
+        return months >= 12 ? '${months ~/ 12}A' : '${months}M';
+    }
+  }
+
+  /// RF18: plazo en múltiplos de 6 meses dentro del rango del producto.
+  static int snapTermMonths(int value, CreditLineParams line) {
+    final min = line.minTermMonths;
+    final max = line.maxTermMonths;
+    final clamped = value.clamp(min, max);
+    final stepsFromMin = ((clamped - min) / 6).round();
+    final snapped = min + stepsFromMin * 6;
+    return snapped.clamp(min, max);
+  }
 }

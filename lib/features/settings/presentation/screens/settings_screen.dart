@@ -3,7 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/router/app_router.dart';
+import '../../../../core/router/auth_flow.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/user_preferences.dart';
 
@@ -244,10 +244,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await ref.read(authServiceProvider).signOut();
-                          if (context.mounted) context.go(AppRoutes.login);
-                        },
+                        onPressed: () =>
+                            signOutWithConfirmation(context, ref),
                         icon: const Icon(Icons.logout,
                             color: AppColors.riskHigh),
                         label: const Text('Cerrar sesión',

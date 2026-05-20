@@ -17,6 +17,7 @@ import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/auth/presentation/screens/client_home_screen.dart';
 import '../../features/history/presentation/screens/evaluations_history_screen.dart';
+import 'role_guard.dart';
 
 class AppRoutes {
   static const splash = '/';
@@ -77,14 +78,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.clientHome,
         pageBuilder: (context, state) => CustomTransitionPage(
-          child: const ClientHomeScreen(),
+          child: const ClientRouteGate(child: ClientHomeScreen()),
           transitionsBuilder: _fadeTransition,
         ),
       ),
       GoRoute(
         path: AppRoutes.interview,
         pageBuilder: (context, state) => CustomTransitionPage(
-          child: const InterviewScreen(),
+          child: const ClientRouteGate(child: InterviewScreen()),
           transitionsBuilder: _slideTransition,
         ),
       ),
@@ -93,7 +94,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final caseId = state.extra as String?;
           return CustomTransitionPage(
-            child: DocumentsScreen(caseId: caseId),
+            child: ClientRouteGate(child: DocumentsScreen(caseId: caseId)),
             transitionsBuilder: _slideTransition,
           );
         },
@@ -103,7 +104,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final profileId = state.extra as String?;
           return CustomTransitionPage(
-            child: CalculatorScreen(profileId: profileId),
+            child: ClientRouteGate(child: CalculatorScreen(profileId: profileId)),
             transitionsBuilder: _slideTransition,
           );
         },
@@ -113,7 +114,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final profileId = state.extra as String?;
           return CustomTransitionPage(
-            child: SimulatorScreen(profileId: profileId),
+            child: ClientRouteGate(child: SimulatorScreen(profileId: profileId)),
             transitionsBuilder: _slideTransition,
           );
         },
@@ -121,7 +122,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.advisorDashboard,
         pageBuilder: (context, state) => CustomTransitionPage(
-          child: const AdvisorDashboardScreen(),
+          child: const AdvisorRouteGate(child: AdvisorDashboardScreen()),
           transitionsBuilder: _fadeTransition,
         ),
       ),
@@ -130,7 +131,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final profileId = state.extra as String? ?? '';
           return CustomTransitionPage(
-            child: ClientDetailScreen(profileId: profileId),
+            child: AdvisorRouteGate(
+              child: ClientDetailScreen(profileId: profileId),
+            ),
             transitionsBuilder: _slideTransition,
           );
         },
@@ -152,7 +155,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.payments,
         pageBuilder: (context, state) => CustomTransitionPage(
-          child: const PaymentsScreen(),
+          child: const AdvisorRouteGate(child: PaymentsScreen()),
           transitionsBuilder: _slideTransition,
         ),
       ),
@@ -166,7 +169,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.evaluationsHistory,
         pageBuilder: (context, state) => CustomTransitionPage(
-          child: const EvaluationsHistoryScreen(),
+          child: const ClientRouteGate(child: EvaluationsHistoryScreen()),
           transitionsBuilder: _slideTransition,
         ),
       ),

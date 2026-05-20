@@ -1,6 +1,6 @@
 # Resumen para exposicion por ramas
 
-**Ultima actualizacion:** **11 de mayo de 2026**. Incluye secciones **11** a **11.5**, **12** (**RF-K15–K19**, **RF-B10–B14**) y **14** (**RF-B15–RF-B19** en `brandon-main`, cola local de documentos), más estado de integración entre ramas.
+**Ultima actualizacion:** **17 de mayo de 2026**. Incluye **§14** (**RF-B15–B19**), **§17** cierre Brandon (**RF04, RF06, RF11, RF16, RF18–RF20, RF32**). Kevin: `kevin-main` (`0177d9d`). Merge: **§17.4**.
 
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
@@ -815,4 +815,52 @@ Complementan **RF-B10–B14** (vista de documentos ya en la nube) con control op
 1. Añadir varios archivos mezclando tipos; ver resumen **RF-B15** y filtrar por tipo **RF-B16**.
 2. Cambiar orden **RF-B17** y activar **Agrupar por tipo** **RF-B18**.
 3. **Copiar cola (TSV)** y pegar en Excel; usar **Quitar pendientes** tras un error simulado **RF-B19**.
+
+---
+
+## 17) Cierre `brandon-main` — **RF04, RF06, RF11, RF16, RF18–RF20, RF32** — **17/05/2026**
+
+**Estado:** **implementados** en codigo en **`brandon-main`**. Commit de referencia al subir: `feat(brandon-main): cerrar RF04 RF06 RF11 RF16 RF18-20 RF32`.
+
+### 17.1) Tabla resumen (README ↔ codigo)
+
+| ID README | Nombre | Comportamiento entregado |
+|-----------|--------|--------------------------|
+| **RF04** | Roles (cliente) | `ClientRouteGate` en home, entrevista, documentos, calculadora, simulador, historial; asesor redirige al CRM. |
+| **RF06** | Actividad economica | Limites 600 meses / ingreso max; mismos campos en calculadora y resumen asesor. |
+| **RF11** | Obligaciones | Modal agregar/editar; saldo en tarjeta; validacion de montos. |
+| **RF16** | Clasificacion riesgo | `riskLabelForScore`, `riskBandDescription`, colores via `AppConstants`. |
+| **RF18** | Plazo y presets | Presets 6M, 1A, 2A, 3A, 5A, 7A filtrados por linea; plazo en pasos de 6 meses. |
+| **RF19** | Tipo de credito | 6 opciones en `AppConstants.creditTypes`; visible en historial y copiar resumen. |
+| **RF20** | Cuota francesa | PMT redondeado; banner si cuota > capacidad disponible. |
+| **RF32** | Cierre de sesion | Confirmacion en home, entrevista, documentos y configuracion. |
+
+### 17.2) Archivos tocados
+
+| Archivo | Cambio |
+|---------|--------|
+| `lib/core/constants/app_constants.dart` | Limites RF06, helpers RF16, presets RF18. |
+| `lib/core/constants/credit_line_params.dart` | Presets y snap de plazo RF18. |
+| `lib/core/router/role_guard.dart`, `auth_flow.dart`, `app_router.dart` | RF04, RF32. |
+| `lib/features/interview/presentation/screens/interview_screen.dart` | RF06, RF11, RF32. |
+| `lib/features/calculator/presentation/screens/calculator_screen.dart` | RF06, RF16. |
+| `lib/features/simulator/presentation/screens/simulator_screen.dart` | RF18, RF19, RF20. |
+| `lib/features/history/.../evaluations_history_screen.dart` | RF19. |
+| `lib/features/advisor/.../client_detail_screen.dart` | RF06, RF19. |
+| `lib/features/auth/.../client_home_screen.dart`, `documents_screen.dart`, `settings_screen.dart` | RF32. |
+
+### 17.3) Demo sugerida (cliente)
+
+1. Entrevista: actividad con limites; agregar y **editar** obligacion (**RF06**, **RF11**).
+2. Calculadora: score con descripcion de banda (**RF16**).
+3. Simulador: presets 6M–7A, aviso de cuota alta (**RF18**, **RF19**, **RF20**).
+4. Cerrar sesion desde home o documentos (**RF32**).
+
+### 17.4) Integracion entre ramas (siguiente paso)
+
+| Paso | Accion |
+|------|--------|
+| 1 | En `kevin-main`: `git merge origin/brandon-main` → incluye cierre Brandon |
+| 2 | En `brandon-main`: `git merge origin/kevin-main` → incluye RF-K20–K24 y cierre Kevin (`0177d9d`) |
+| 3 | `dart analyze` y demo unificada |
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/app_constants.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -56,9 +57,9 @@ class AppColors {
   
   // Score colores
   static Color scoreColor(int score) {
-    if (score >= 80) return riskLow;
-    if (score >= 60) return riskMedium;
-    if (score >= 40) return riskHigh;
+    if (score >= AppConstants.scoreRiskLow) return riskLow;
+    if (score >= AppConstants.scoreRiskMedium) return riskMedium;
+    if (score >= AppConstants.scoreRiskHigh) return riskHigh;
     return riskVeryHigh;
   }
 }
