@@ -1015,6 +1015,21 @@ flutter run
 
 ---
 
+## Documentación de entrega
+
+Documentación consolidada para la auditoría de entrega final:
+
+| Documento | Descripción |
+|-----------|-------------|
+| [docs/TECNICA.md](docs/TECNICA.md) | Arquitectura, stack, modelo Firestore, score, compilación APK |
+| [docs/manual/MANUAL_USUARIO.md](docs/manual/MANUAL_USUARIO.md) | Manual para clientes y asesores (lenguaje sencillo) |
+| [docs/ELEVATOR_PITCH.md](docs/ELEVATOR_PITCH.md) | Guion de presentación ≤ 2 minutos |
+| [docs/PRESENTACION.md](docs/PRESENTACION.md) | Slides y guion de demo en vivo |
+| [releases/RiskMobile-v1.0.0.apk](releases/RiskMobile-v1.0.0.apk) | APK release Android (v1.0.0) |
+| [docs/diagramas/](docs/diagramas/) | Diagramas Mermaid (arquitectura y ER Firestore) |
+
+---
+
 ## Licencia
 
 Proyecto académico — Universidad | Computación Móvil 2026-1
