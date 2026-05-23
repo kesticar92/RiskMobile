@@ -1,0 +1,100 @@
+erDiagram
+    USERS ||--o{ CASES : "clientId"
+    USERS ||--o{ DOCUMENTS : "userId"
+    USERS ||--o{ COMMISSIONS : "advisorId"
+    USERS ||--o{ NOTIFICATIONS : "userId"
+    CASES ||--o{ DOCUMENTS : "caseId"
+    CASES ||--o{ CASE_STATUS_HISTORY : "subcollection"
+    CASES ||--o{ COMMISSIONS : "caseId"
+    MESSAGES ||--o{ CHAT : "subcollection chatId"
+
+    USERS {
+        string uid PK
+        string name
+        string email
+        string role "client | advisor"
+        string phone
+        string photoUrl
+        timestamp createdAt
+        boolean isActive
+    }
+
+    CASES {
+        string id PK
+        string clientId FK
+        string clientName
+        string economicActivity
+        string contractType
+        number seniorityMonths
+        number monthlyIncome
+        array obligations
+        number totalMonthlyPayments
+        number debtLevel
+        number availableCapacity
+        number desiredAmount
+        string desiredCreditType
+        number riskScore
+        string caseStatus
+        string advisorInternalNote
+        boolean casePriority
+        boolean caseArchived
+        array caseTags
+        timestamp nextFollowUpAt
+        timestamp lastStatusChangeAt
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    CASE_STATUS_HISTORY {
+        string id PK
+        string previousStatus
+        string newStatus
+        timestamp changedAt
+        string changedBy
+    }
+
+    DOCUMENTS {
+        string id PK
+        string userId FK
+        string caseId FK
+        string fileName
+        string documentType
+        string downloadUrl
+        string reviewStatus
+        timestamp uploadedAt
+    }
+
+    MESSAGES {
+        string chatId PK
+    }
+
+    CHAT {
+        string id PK
+        string senderId FK
+        string senderName
+        string content
+        timestamp timestamp
+    }
+
+    COMMISSIONS {
+        string id PK
+        string advisorId FK
+        string clientId FK
+        string caseId FK
+        string clientName
+        number creditAmount
+        number commissionAmount
+        number costs
+        number profit
+        timestamp createdAt
+    }
+
+    NOTIFICATIONS {
+        string id PK
+        string userId FK
+        string title
+        string body
+        string type
+        boolean read
+        timestamp createdAt
+    }
