@@ -192,6 +192,22 @@ Esta sección consolida el avance histórico por requerimiento, con la mejor fec
 
 ---
 
+## Documentación de entrega
+
+Entregables finales del proyecto (Mayo 2026):
+
+| Documento | Descripción |
+|-----------|-------------|
+| [docs/TECNICA.md](docs/TECNICA.md) | Documentación técnica completa (arquitectura, stack, Firestore, seguridad, compilación APK) |
+| [docs/manual/MANUAL_USUARIO.md](docs/manual/MANUAL_USUARIO.md) | Manual paso a paso — flujos Cliente y Asesor |
+| [docs/ELEVATOR_PITCH.md](docs/ELEVATOR_PITCH.md) | Guion elevator pitch cronometrado (~2 min) |
+| [docs/PRESENTACION.md](docs/PRESENTACION.md) | Outline 12 slides + guion demo 5–7 min |
+| [docs/diagramas/](docs/diagramas/) | Diagramas Mermaid (arquitectura y ER Firestore) |
+| [docs/demo/README.md](docs/demo/README.md) | Instrucciones para grabar video demo |
+| [releases/RiskMobile-v1.0.0.apk](releases/RiskMobile-v1.0.0.apk) | APK release Android v1.0.0 (~60 MB) |
+
+---
+
 ## Descripción del Proyecto
 
 RiskMobile es una aplicación móvil multiplataforma (Android/iOS) desarrollada con **Flutter** y **Firebase**, diseñada para realizar preevaluaciones crediticias sin generar consultas en centrales de riesgo. La plataforma conecta a clientes interesados en acceder a créditos con asesores financieros independientes, proporcionando herramientas de evaluación financiera, simulación de crédito y gestión integral del negocio de asesoría.
