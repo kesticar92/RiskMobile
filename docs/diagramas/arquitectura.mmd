@@ -1,0 +1,51 @@
+flowchart TB
+    subgraph UI["Capa de Presentación (UI)"]
+        Splash["SplashScreen"]
+        Auth["Login / Register / ForgotPassword"]
+        Client["ClientHome / Interview / Documents"]
+        Calc["Calculator / Simulator / History"]
+        Advisor["AdvisorDashboard / ClientDetail"]
+        Chat["ChatScreen"]
+        Settings["Settings / Payments"]
+    end
+
+    subgraph State["Capa de Estado (Riverpod)"]
+        Router["appRouterProvider (GoRouter)"]
+        AuthProv["authServiceProvider"]
+        FireProv["firestoreServiceProvider"]
+        StorageProv["storageServiceProvider"]
+        PrefsProv["userPreferencesProvider"]
+    end
+
+    subgraph Services["Capa de Servicios"]
+        AuthSvc["AuthService"]
+        FireSvc["FirestoreService"]
+        StorageSvc["StorageService"]
+        RiskCalc["RiskCalculator"]
+        Formatters["Formatters"]
+    end
+
+    subgraph Firebase["Backend Firebase (BaaS)"]
+        FAuth["Firebase Authentication"]
+        FStore["Cloud Firestore"]
+        FStorage["Firebase Storage"]
+    end
+
+    subgraph Plugins["Plugins nativos"]
+        LocalAuth["local_auth (biometría)"]
+        ImagePicker["image_picker / file_picker"]
+        SharePlus["share_plus / url_launcher"]
+    end
+
+    UI --> State
+    State --> Services
+    AuthSvc --> FAuth
+    FireSvc --> FStore
+    StorageSvc --> FStorage
+    Calc --> RiskCalc
+    Auth --> LocalAuth
+    Client --> ImagePicker
+    Advisor --> SharePlus
+
+    FStore --> |"users, cases, messages, documents, commissions, notifications"| FireSvc
+    FStorage --> |"documentos por usuario/caso"| StorageSvc
