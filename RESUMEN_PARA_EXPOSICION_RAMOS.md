@@ -1,6 +1,6 @@
 # Resumen para exposicion por ramas
 
-**Ultima actualizacion:** **8 de mayo de 2026**. Incluye secciones **11** a **11.5** (RF-K5–K14, RF-B5–B9) y **12** con **RF-K15–K19** y **RF-B10–B14** implementados, más estado de integración entre ramas.
+**Ultima actualizacion:** **17 de mayo de 2026**. Proyecto unificado: **§13–§17** (oleadas y cierres Kevin/Brandon), **§18** (merge entre ramas). Commits: `0177d9d`, `9901f2c`, `126fc54`.
 
 Este documento explica, de forma descriptiva, los ultimos requerimientos desarrollados, en que rama quedaron, en que archivos estan y que comportamiento se puede demostrar en la exposicion.
 
@@ -785,4 +785,245 @@ Tras un merge **de `brandon-main` hacia `kevin-main`**, el árbol de archivos de
 
 - `brandon-main` ya integró `kevin-main` mediante merge, quedando una rama de prueba con ambas tandas (Kevin + Brandon).
 - Si se quiere simetría total, falta merge inverso de `brandon-main` hacia `kevin-main` o integración de ambas en `main`.
+
+---
+
+## 14) Quinta oleada — **RF-B15–RF-B19** (`brandon-main`) — **11/05/2026**
+
+**Estado:** **implementados** en codigo (pantalla **Mis documentos**, cola local antes de subir a Storage).
+
+Complementan **RF-B10–B14** (vista de documentos ya en la nube) con control operativo de los archivos que el cliente **aún no** ha enviado.
+
+### 14.1) Tabla resumen (`brandon-main`)
+
+| ID | Nombre | Comportamiento en la app |
+|----|--------|--------------------------|
+| **RF-B15** | Resumen de cola local | Chips con total de archivos en cola, **MB estimados** (suma de `sizeBytes` tras validación), y conteos **Pend. / Err. / Ok**. |
+| **RF-B16** | Filtro por tipo de soporte (cola) | `FilterChip` **Todos** + un chip por cada tipo de documento; la lista mostrada respeta el filtro. |
+| **RF-B17** | Orden de cola local | `ChoiceChip` **Captura** (orden de llegada), **Tipo soporte**, **Nombre**; usa campo `captureOrder` en `_DocItem`. |
+| **RF-B18** | Agrupar cola por tipo | `FilterChip` **Agrupar por tipo**: secciones con titulo `tipo (N)` y filas bajo cada grupo. |
+| **RF-B19** | Copiar cola y quitar pendientes | **Copiar cola (TSV)** al portapapeles (nombre, tipo archivo, tipo soporte, estado, bytes). **Quitar pendientes** elimina con confirmacion solo items **pendiente** o **error** (no borra completados). |
+
+**Archivo tocado:** `lib/features/documents/presentation/screens/documents_screen.dart`.
+
+### 14.2) Autoria y ramas
+
+- Subir en **`brandon-main`** (p. ej. `feat(brandon): RF-B15–B19 cola local documentos`).
+
+### 14.3) Demo sugerida
+
+1. Añadir varios archivos mezclando tipos; ver resumen **RF-B15** y filtrar por tipo **RF-B16**.
+2. Cambiar orden **RF-B17** y activar **Agrupar por tipo** **RF-B18**.
+3. **Copiar cola (TSV)** y pegar en Excel; usar **Quitar pendientes** tras un error simulado **RF-B19**.
+
+---
+
+## 13) Quinta oleada — **RF-K20–RF-K24** (`kevin-main`) — **11/05/2026**
+
+**Estado:** **implementados** en codigo en **`kevin-main`** (CRM asesor + detalle + router + Firestore).
+
+| ID | Nombre | Comportamiento en la app |
+|----|--------|--------------------------|
+| **RF-K20** | Filtro por ventana de seguimiento | Chips **Todos / Vencido / Hoy / Próx. 7 días / Sin fecha** sobre `nextFollowUpAt`; integrado con **Limpiar todo**. |
+| **RF-K21** | Búsqueda por email y teléfono | `getUsersByIds` + buscador CRM por nombre, ID, email o teléfono. |
+| **RF-K22** | Mensaje opcional al cambiar estado | Campo bajo el estado; se añade a notificación `case_status_changed`. |
+| **RF-K23** | Acceso directo al chat | Icono en tarjeta CRM y cabecera de detalle → `/chat` con `caseId`. |
+| **RF-K24** | Mini panel de KPIs | `ExpansionTile` **Indicadores de la vista actual** + **Copiar KPIs**. |
+
+**Archivos:** `advisor_dashboard_screen.dart`, `client_detail_screen.dart`, `firestore_service.dart`, `app_router.dart`, `app_constants.dart`, `firestore.indexes.json`.
+
+> En **`brandon-main`** este bloque entra al culminar el proyecto vía **merge** desde `kevin-main` (ver **15.4**), no reimplementar.
+
+---
+
+## 15) Plan de cierre del proyecto — pendientes por rama — **11/05/2026**
+
+**Objetivo:** cerrar los requerimientos del README marcados como **Parcial**, repartidos por autoria de rama, **antes** de unificar codigo con merge entre `kevin-main` y `brandon-main`.
+
+**Orden acordado del equipo:**
+
+1. **Documentacion** (esta seccion y tablas en `README.md`).
+2. **Implementacion y cierre** por rama (tablas **15.2** y **15.3**).
+3. **Merge** entre ramas y, si aplica, integracion en `main` (**15.4**).
+
+### 15.1) Estado global
+
+| Bloque | Cantidad | Estado |
+|--------|----------|--------|
+| Oleadas **RF-K1–K24** (`kevin-main`) | 24 | Implementados |
+| Oleadas **RF-B1–B19** (`brandon-main`) | 19 | Implementados |
+| RF README **Parcial** por cerrar | **0** | Cerrados en **§16** y **§17** |
+| Cierre **`kevin-main`** (RF04, RF27–RF32) | **7** | **Realizado** — **§16** (`0177d9d`) |
+| Cierre **`brandon-main`** (RF06, RF11, RF16, RF18–RF20, RF04, RF32) | **8** | **Realizado** — **§17** (`9901f2c`) |
+| Merge cruzado | **2** acciones | **Completado** — **§18** |
+
+### 15.2) Rama `kevin-main` — cierre asesor / CRM / financiero — **COMPLETADO (17/05/2026)**
+
+**Responsable:** Kevin. **Commit en `origin/kevin-main`:** `0177d9d` — `feat(kevin-main): cerrar RF04, RF27-31 y RF32 del bloque asesor`. Detalle en **§16**.
+
+| ID README | Nombre | Objetivo de cierre | Archivos / area previstos | Criterio de aceptacion (demo) |
+|-----------|--------|--------------------|---------------------------|-------------------------------|
+| **RF27** | Búsqueda + filtro CRM (optimizacion) | Mantener filtros actuales; documentar limites; opcional: acotar lecturas Firestore (p. ej. indices, menos `getUsersByIds` repetido). | `advisor_dashboard_screen.dart`, `firestore_service.dart`, `firestore.indexes.json` | CRM fluido con cartera grande; filtros + busqueda sin bloqueos perceptibles. |
+| **RF28** | Registro de comisiones | Validar reglas de negocio, campos obligatorios y persistencia. | `payments_screen.dart`, `firestore_service.dart` (coleccion `commissions`) | Asesor registra comision; aparece en historial/panel. |
+| **RF29** | Panel financiero asesor | Tab **Financiero**: totales alineados con casos reales (aprobados, en proceso). | `advisor_dashboard_screen.dart` (tab Financiero), datos desde Firestore | Cifras del panel coinciden con casos visibles en CRM. |
+| **RF30** | Utilidad neta e historial consolidado | Conciliar utilidad = ingresos comisiones − costos declarados (segun modelo actual). | Tab Financiero + `payments_screen.dart` | Utilidad neta coherente con comisiones de prueba. |
+| **RF31** | Estadisticas del asesor | Refinar chips/cards (total, aprobados, en proceso) y, si aplica, periodo o % documentados. | `advisor_dashboard_screen.dart` | Estadisticas del encabezado CRM coinciden con la lista filtrada. |
+| **RF04** | Roles y permisos (compartido) | **Parte asesor:** redirect si cliente intenta `/advisor-dashboard` o `/client-detail`; validar rol en rutas criticas. | `app_router.dart`, guards o chequeo en pantallas asesor | Usuario cliente no accede al CRM; asesor entra al panel. |
+| **RF32** | Cierre de sesion (compartido) | **Parte asesor:** logout desde perfil asesor y configuracion; limpieza de sesion y `go(login)`. | `advisor_dashboard_screen.dart`, `settings_screen.dart`, `auth_service.dart` | Tras cerrar sesion, no queda pantalla asesor en atras. |
+
+**Documentacion en esta rama (Kevin):** **§13**, **§16** y filas **Realizado** en `README.md` actualizadas.
+
+**Conteo exclusivo Kevin:** **5** RF + **2** compartidos (RF04, RF32) — **cerrados** en `kevin-main`.
+
+### 15.3) Rama `brandon-main` — cierre cliente / entrevista / simulador / documentos — **COMPLETADO (17/05/2026)**
+
+**Responsable:** Brandon. **Commit:** `9901f2c` — `feat(brandon-main): cerrar RF04 RF06 RF11 RF16 RF18-20 RF32`. Detalle en **§17**.
+
+| ID README | Nombre | Objetivo de cierre | Archivos / area previstos | Criterio de aceptacion (demo) |
+|-----------|--------|--------------------|---------------------------|-------------------------------|
+| **RF06** | Actividad economica | Mismos campos y etiquetas en entrevista, perfil calculadora y bloque entrevista en detalle asesor (RF24). | `interview_screen.dart`, `calculator_screen.dart`, `client_detail_screen.dart`, `financial_profile_model.dart` | Actividad y contrato no se contradicen entre pantallas. |
+| **RF11** | Obligaciones multiples | Editar/eliminar filas, validar montos, sin duplicados; pruebas borde (0 obligaciones, muchas filas). | `interview_screen.dart` | Agregar, editar y quitar obligacion sin romper paso 2 ni paso 3. |
+| **RF16** | Clasificacion de riesgo completa | Colores y textos para bajo, medio, alto, muy alto en score y gauges. | `risk_score_widget.dart`, `calculator_screen.dart`, `app_constants.dart` | Score 39 vs 41 vs 80 muestra etiqueta y color correctos. |
+| **RF18** | Slider de plazo con presets | Presets por linea de credito; limites 6–240 meses respetados. | `simulator_screen.dart`, `credit_line_params.dart` | Cambiar linea de credito actualiza plazo maximo y presets. |
+| **RF19** | Selector tipo de credito (6 opciones) | Lista unica en `AppConstants.creditTypes` usada en entrevista y simulador. | `app_constants.dart`, `interview_screen.dart`, `simulator_screen.dart` | Mismas 6 opciones en todos los flujos. |
+| **RF20** | Cuota francesa y limites | Redondeo estable; tasas 0.5–4 %; plazos extremos no rompen UI. | `simulator_screen.dart`, util de amortizacion si existe | Cuota y total recalculan al mover sliders sin NaN ni crash. |
+| **RF04** | Roles y permisos (compartido) | **Parte cliente:** cliente no abre rutas solo-asesor; splash/login redirigen por rol. | `app_router.dart`, `splash_screen.dart`, `login_screen.dart` | Asesor no queda en home cliente por defecto tras login. |
+| **RF32** | Cierre de sesion (compartido) | **Parte cliente:** logout en home, documentos, entrevista, configuracion. | `client_home_screen.dart`, `documents_screen.dart`, `settings_screen.dart` | Tras logout, vuelta a login sin acceso a datos del usuario anterior. |
+
+**Documentacion en esta rama (Brandon):**
+
+- Mantener **§14** (RF-B15–B19).
+- Tras merge futuro, incorporar referencia a **§13** (RF-K20–K24) sin duplicar implementacion.
+- Actualizar `README.md` y `RESUMEN_ENTREGABLE.md` §17 (bloque cierre Brandon).
+
+**Conteo exclusivo Brandon:** **6** RF · **Compartidos:** RF04 + RF32.
+
+### 15.4) Integracion entre ramas (fase posterior — no hacer antes del cierre)
+
+| Paso | Quien | Accion | Resultado |
+|------|-------|--------|-----------|
+| 1 | Kevin | `git fetch origin` → `git merge origin/brandon-main` en `kevin-main` → resolver conflictos → `git push origin kevin-main` | `kevin-main` incluye **RF-B15–B19** y cierres Brandon |
+| 2 | Brandon | `git fetch origin` → `git merge origin/kevin-main` en `brandon-main` → resolver conflictos → `git push origin brandon-main` | `brandon-main` incluye **RF-K20–K24** y cierres Kevin |
+| 3 | Equipo | `dart analyze`; demo cliente + asesor; opcional merge a `main` | Proyecto unificado para exposicion |
+
+**Codigo que viaja solo con merge (ya implementado, no rehacer):**
+
+| Solo en `kevin-main` hoy | Solo en `brandon-main` hoy |
+|--------------------------|----------------------------|
+| RF-K20 – RF-K24 | RF-B15 – RF-B19 |
+
+### 15.5) Checklist de culminacion (exposicion)
+
+- [x] RF27–RF31 + RF04 + RF32 cerrados en `kevin-main` + README actualizado (**§16**, `0177d9d`).
+- [x] RF06, RF11, RF16, RF18–RF20 + RF04 + RF32 cerrados en `brandon-main` (`9901f2c`).
+- [x] Documentacion Kevin y Brandon actualizada.
+- [x] Merge **§18** ejecutado en `kevin-main` y `brandon-main`.
+- [ ] Demo unificada post-merge (cliente + asesor).
+
+### 15.6) Opcional — sexta oleada (solo si el docente pide mas entregables numerados)
+
+No bloquea el cierre de los 13 **Parcial**. Si se aprueba:
+
+| `kevin-main` (ej. RF-K25–K29) | `brandon-main` (ej. RF-B20–B24) |
+|-------------------------------|--------------------------------|
+| Export cartera completa (TSV ampliado) | Miniatura documentos en nube (`downloadUrl`) |
+| Badge seguimiento vencido en CRM | Aviso al salir si cola local tiene pendientes |
+| Filtros CRM persistidos en sesion | Deteccion duplicado por nombre de archivo |
+| Historial estado con export PDF/texto | Descargar archivo al dispositivo |
+| Resumen comisiones en tab Financiero | % checklist soportes en home cliente |
+
+---
+
+## 16) Cierre `kevin-main` — **RF04, RF27–RF32** — **17/05/2026**
+
+**Estado:** **implementados** y documentados. **Commit:** `0177d9d` en `origin/kevin-main`.
+
+### 16.1) Tabla resumen (README ↔ codigo)
+
+| ID README | Nombre | Comportamiento entregado |
+|-----------|--------|--------------------------|
+| **RF04** | Roles y permisos | `AdvisorRouteGate` y `ClientRouteGate` envuelven rutas CRM, cliente, pagos, historial y detalle; redireccion a login o home segun rol. |
+| **RF27** | CRM optimizado | `getUsersByIds` solo cuando la busqueda incluye `@` o digitos (email/telefono); menos lecturas Firestore en scroll. |
+| **RF28** | Comisiones | Formulario con caso opcional, comision > 0, costos >= 0, dialogo si costos > comision; persiste en `commissions`. |
+| **RF29** | Panel financiero | Tab **Financiero**: resumen de cartera + comisiones con filtro 30/90/todo y boton **Registrar**. |
+| **RF30** | Utilidad neta | Tarjeta utilidad neta y utilidad por fila en historial; **Copiar resumen** (portapapeles). |
+| **RF31** | Estadisticas asesor | Filas Total/Aprobados/En proceso/Rechazados segun **cartera completa** o **vista filtrada**; KPIs con rechazados. |
+| **RF32** | Cierre de sesion | `signOutWithConfirmation` en perfil asesor y pantalla de configuracion (compartida). |
+
+### 16.2) Archivos tocados
+
+| Archivo | Cambio |
+|---------|--------|
+| `lib/core/router/role_guard.dart` | **Nuevo** — gates por rol. |
+| `lib/core/router/auth_flow.dart` | **Nuevo** — logout con confirmacion. |
+| `lib/core/router/app_router.dart` | Rutas envueltas con gates. |
+| `lib/features/advisor/presentation/screens/advisor_dashboard_screen.dart` | RF27–RF31, tab Financiero RF29–RF30. |
+| `lib/features/payments/presentation/screens/payments_screen.dart` | RF28. |
+| `lib/features/settings/presentation/screens/settings_screen.dart` | RF32 (logout confirmado). |
+
+### 16.3) Demo sugerida (asesor)
+
+1. Login **cliente** → intentar URL mental de CRM: la app redirige al home cliente (**RF04**).
+2. Login **asesor** → CRM: buscar por telefono; ver estadisticas con filtro activo (**RF27**, **RF31**).
+3. Tab **Financiero** → filtro 30 dias, copiar resumen, registrar comision vinculada a caso (**RF29**, **RF30**, **RF28**).
+4. Perfil o **Configuracion** → cerrar sesion con confirmacion (**RF32**).
+
+---
+
+## 17) Cierre `brandon-main` — **RF04, RF06, RF11, RF16, RF18–RF20, RF32** — **17/05/2026**
+
+**Estado:** **implementados** en codigo en **`brandon-main`**. Commit de referencia al subir: `feat(brandon-main): cerrar RF04 RF06 RF11 RF16 RF18-20 RF32`.
+
+### 17.1) Tabla resumen (README ↔ codigo)
+
+| ID README | Nombre | Comportamiento entregado |
+|-----------|--------|--------------------------|
+| **RF04** | Roles (cliente) | `ClientRouteGate` en home, entrevista, documentos, calculadora, simulador, historial; asesor redirige al CRM. |
+| **RF06** | Actividad economica | Limites 600 meses / ingreso max; mismos campos en calculadora y resumen asesor. |
+| **RF11** | Obligaciones | Modal agregar/editar; saldo en tarjeta; validacion de montos. |
+| **RF16** | Clasificacion riesgo | `riskLabelForScore`, `riskBandDescription`, colores via `AppConstants`. |
+| **RF18** | Plazo y presets | Presets 6M, 1A, 2A, 3A, 5A, 7A filtrados por linea; plazo en pasos de 6 meses. |
+| **RF19** | Tipo de credito | 6 opciones en `AppConstants.creditTypes`; visible en historial y copiar resumen. |
+| **RF20** | Cuota francesa | PMT redondeado; banner si cuota > capacidad disponible. |
+| **RF32** | Cierre de sesion | Confirmacion en home, entrevista, documentos y configuracion. |
+
+### 17.2) Archivos tocados
+
+| Archivo | Cambio |
+|---------|--------|
+| `lib/core/constants/app_constants.dart` | Limites RF06, helpers RF16, presets RF18. |
+| `lib/core/constants/credit_line_params.dart` | Presets y snap de plazo RF18. |
+| `lib/core/router/role_guard.dart`, `auth_flow.dart`, `app_router.dart` | RF04, RF32. |
+| `lib/features/interview/presentation/screens/interview_screen.dart` | RF06, RF11, RF32. |
+| `lib/features/calculator/presentation/screens/calculator_screen.dart` | RF06, RF16. |
+| `lib/features/simulator/presentation/screens/simulator_screen.dart` | RF18, RF19, RF20. |
+| `lib/features/history/.../evaluations_history_screen.dart` | RF19. |
+| `lib/features/advisor/.../client_detail_screen.dart` | RF06, RF19. |
+| `lib/features/auth/.../client_home_screen.dart`, `documents_screen.dart`, `settings_screen.dart` | RF32. |
+
+### 17.3) Demo sugerida (cliente)
+
+1. Entrevista: actividad con limites; agregar y **editar** obligacion (**RF06**, **RF11**).
+2. Calculadora: score con descripcion de banda (**RF16**).
+3. Simulador: presets 6M–7A, aviso de cuota alta (**RF18**, **RF19**, **RF20**).
+4. Cerrar sesion desde home o documentos (**RF32**).
+
+### 17.4) Integracion entre ramas
+
+Ver **§18** (merge completado).
+
+---
+
+## 18) Merge `kevin-main` ↔ `brandon-main` — **17/05/2026**
+
+**Estado:** **completado** en ambas ramas tras resolver conflictos en documentacion.
+
+| Rama | Accion | Resultado |
+|------|--------|-----------|
+| `kevin-main` | `merge origin/brandon-main` | Codigo unificado: CRM Kevin + cliente/documentos Brandon |
+| `brandon-main` | `merge origin/kevin-main` | Misma base de codigo; historial alineado |
+
+**Incluye en el arbol:** RF-K1–K24, RF-B1–B19, cierre README RF04–RF32.
+
+**Siguiente:** `dart analyze` y demo cliente + asesor en cualquiera de las dos ramas (codigo equivalente tras merge).
 

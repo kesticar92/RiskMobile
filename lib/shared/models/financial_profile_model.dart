@@ -93,12 +93,7 @@ class FinancialProfileModel {
   // Score RiskMobile
   int riskScore;
 
-  String get riskLabel {
-    if (riskScore >= AppConstants.scoreRiskLow) return 'Riesgo Bajo';
-    if (riskScore >= AppConstants.scoreRiskMedium) return 'Riesgo Medio';
-    if (riskScore >= AppConstants.scoreRiskHigh) return 'Riesgo Alto';
-    return 'Riesgo Muy Alto';
-  }
+  String get riskLabel => AppConstants.riskLabelForScore(riskScore);
 
   String get debtLevelLabel {
     final pct = (debtLevel * 100).toStringAsFixed(1);

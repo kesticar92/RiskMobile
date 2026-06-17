@@ -27,7 +27,8 @@ android {
         applicationId = "com.riskmobile.riskmobile_scaffold"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Firebase Auth 23.x requiere minSdk 23 (Flutter por defecto puede ser 21).
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

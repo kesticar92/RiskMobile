@@ -169,26 +169,23 @@ Esta sección consolida el avance histórico por requerimiento, con la mejor fec
 | RF36 Recuperar contraseña | Realizado | Sesión inicial (fecha no registrada) | Pantalla y flujo de restablecimiento. |
 | RF37 Historial evaluaciones | Realizado | Sesión previa + 16/04/2026 | Historial y consulta documental por caso. |
 | RF38 Validación documental asesor | Realizado | Sesión previa (fecha no registrada) | Estados de revisión documental y notificación al cliente. |
+| RF04 Roles y permisos finos por pantalla | Realizado | 17/05/2026 | `AdvisorRouteGate` / `ClientRouteGate` (`role_guard.dart`, `app_router.dart`). |
+| RF06 Solicitud/almacenamiento de actividad económica | Realizado | 17/05/2026 | Límites entrevista; actividad en calculadora y detalle asesor. |
+| RF11 Alta de múltiples obligaciones por formulario dinámico | Realizado | 17/05/2026 | Agregar, editar y eliminar obligaciones (paso 2). |
+| RF16 Clasificación de riesgo completa | Realizado | 17/05/2026 | `riskLabelForScore`, `riskBandDescription`, colores unificados. |
+| RF18 Slider de plazo con presets | Realizado | 17/05/2026 | Presets 6M–7A por línea; plazo en múltiplos de 6 meses. |
+| RF19 Selector tipo de crédito (6 opciones) | Realizado | 17/05/2026 | `AppConstants.creditTypes` en entrevista, simulador, historial y CRM. |
+| RF20 Fórmula de cuota francesa y validaciones límite | Realizado | 17/05/2026 | Cuota redondeada; aviso si supera capacidad disponible. |
+| RF27 Búsqueda + filtro CRM (optimización) | Realizado | 17/05/2026 | Índice contactos bajo demanda; estadísticas por vista filtrada. |
+| RF28 Registro de comisiones | Realizado | 17/05/2026 | Vínculo a caso, validaciones, panel e historial (`payments_screen.dart`). |
+| RF29 Panel financiero asesor | Realizado | 17/05/2026 | Tab Financiero con cartera y comisiones por periodo. |
+| RF30 Utilidad neta e historial consolidado | Realizado | 17/05/2026 | Utilidad neta consolidada; copiar resumen al portapapeles. |
+| RF31 Estadísticas del asesor | Realizado | 17/05/2026 | Chips y KPIs alineados con cartera o vista filtrada. |
+| RF32 Cierre de sesión en todos los puntos requeridos | Realizado | 17/05/2026 | `signOutWithConfirmation` (asesor y cliente). |
 
 ### Requerimientos pendientes / por cerrar
 
-| Requerimiento | Estado | Próximo paso sugerido |
-|---|---|---|
-| RF04 Roles y permisos finos por pantalla | Parcial | Revisión de autorizaciones por ruta y acciones críticas. |
-| RF06 Solicitud/almacenamiento de actividad económica | Parcial | Auditoría de campos y consistencia entre entrevista y detalle. |
-| RF11 Alta de múltiples obligaciones por formulario dinámico | Parcial | Pruebas de borde y edición/eliminación avanzada. |
-| RF16 Clasificación de riesgo completa | Parcial | Validar reglas de color/texto para todos los rangos extremos. |
-| RF18 Slider de plazo con presets | Parcial | QA cruzado por cada línea de crédito y límites. |
-| RF19 Selector tipo de crédito (6 opciones) | Parcial | Revisar consistencia entre entrevista, simulador y reportes. |
-| RF20 Fórmula de cuota francesa y validaciones límite | Parcial | Pruebas con tasas/plazos extremos y redondeos. |
-| RF27 Búsqueda + filtro CRM (optimización) | Parcial | Mover filtros avanzados a query server-side progresiva. |
-| RF28 Registro de comisiones | Parcial | Completar validaciones de negocio y evidencias en demo. |
-| RF29 Panel financiero asesor | Parcial | Verificar totales con casos reales y estados cerrados. |
-| RF30 Utilidad neta e historial consolidado | Parcial | Incorporar pruebas de conciliación de cifras. |
-| RF31 Estadísticas del asesor | Parcial | Refinar métricas por periodos y estados operativos. |
-| RF32 Cierre de sesión en todos los puntos requeridos | Parcial | Validación completa de UX y retorno seguro a login. |
-
-> Nota: "Parcial" significa que existe implementación funcional, pero se recomienda cierre formal con pruebas de aceptación y checklist de demo.
+Ninguno en el alcance actual del README. Tras merge **`kevin-main`** + **`brandon-main`** (17/05/2026), ver **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §18**.
 
 ---
 

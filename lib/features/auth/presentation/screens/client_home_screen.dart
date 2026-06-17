@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/auth_flow.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/firestore_service.dart';
 import '../../../../shared/widgets/gradient_button.dart';
@@ -123,6 +124,28 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen> {
                                   return Stack(
                                     clipBehavior: Clip.none,
                                     children: [
+                                      IconButton(
+                                        tooltip: 'Cerrar sesión',
+                                        onPressed: () =>
+                                            signOutWithConfirmation(
+                                                context, ref),
+                                        icon: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                              color: AppColors.border,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.logout,
+                                            size: 20,
+                                            color: AppColors.riskHigh,
+                                          ),
+                                        ),
+                                      ),
                                       IconButton(
                                         onPressed: () =>
                                             context.push(AppRoutes.settings),

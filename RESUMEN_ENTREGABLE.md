@@ -1,6 +1,6 @@
 # Resumen del entregable: Conexión a BD, registro y login
 
-**Última actualización del documento:** **8 de mayo de 2026**. Ver **§16** (RF-K15–K19 y RF-B10–B14 implementados + integración entre ramas). Ver **§15** para la iteración abril 2026 (RF-K5–K14, RF-B5–B9, ramas y merge).
+**Última actualización del documento:** **17 de mayo de 2026**. Proyecto unificado tras merge: **§16–§18** en `RESUMEN_PARA_EXPOSICION_RAMOS.md`. Commits `0177d9d`, `9901f2c`.
 
 Documento para exposición y referencia del equipo.
 
@@ -436,3 +436,27 @@ Referencia detallada: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §12**.
 - Validación rápida de integración:
   - `kevin-main..brandon-main` muestra únicamente el commit propio de Brandon (`315c79d`).
   - `brandon-main..kevin-main` muestra únicamente el commit propio de Kevin (`183ce18`) antes de integrar en Kevin la línea de Brandon.
+
+---
+
+## 17. Cierre por rama — **17/05/2026**
+
+### 17.1 `kevin-main` — **REALIZADO** (`0177d9d`)
+
+| ID | Tema |
+|----|------|
+| RF27–RF31, RF04, RF32 | CRM, finanzas, roles, logout asesor |
+
+Detalle: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §16**.
+
+### 17.2 `brandon-main` — **REALIZADO** (`9901f2c`)
+
+| ID | Tema |
+|----|------|
+| RF06, RF11, RF16, RF18–RF20, RF04, RF32 | Cliente, entrevista, simulador |
+
+Detalle: **`RESUMEN_PARA_EXPOSICION_RAMOS.md` §17**.
+
+### 17.3 Merge entre ramas — **§18**
+
+Merge bidireccional completado; codigo unificado en `kevin-main` y `brandon-main`.
