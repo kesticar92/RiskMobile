@@ -63,7 +63,10 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
   void _syncLineParamsFromSelection({bool adjustCustomAmount = true}) {
     final line = CreditLineParamsRegistry.forLine(_selectedCreditType);
     _interestRate = CreditLineParamsRegistry.clampRate(line.referenceMonthlyRate);
-    _termMonths = line.defaultTermMonths.clamp(line.minTermMonths, line.maxTermMonths);
+    _termMonths = CreditLineParamsRegistry.snapTermMonths(
+      line.defaultTermMonths,
+      line,
+    );
     if (!adjustCustomAmount) return;
     final max = _computeMaxCreditWithCap(line);
     final maxSlider = max > 0 ? max * 2 : 0.0;
@@ -86,28 +89,27 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
     super.initState();
     final line = CreditLineParamsRegistry.forLine(_selectedCreditType);
     _interestRate = CreditLineParamsRegistry.clampRate(line.referenceMonthlyRate);
-    _termMonths =
-        line.defaultTermMonths.clamp(line.minTermMonths, line.maxTermMonths);
+    _termMonths = CreditLineParamsRegistry.snapTermMonths(
+      line.defaultTermMonths,
+      line,
+    );
     _load();
   }
 
-  /// Atajos de plazo válidos para la línea actual (sin pisar min/max del producto).
-  List<int> _quickTermPresetMonths() {
-    final p = _lineParams;
-    const candidates = [
-      6, 12, 18, 24, 36, 48, 60, 72, 84, 120, 180, 240
-    ];
-    final list = candidates
-        .where((m) => m >= p.minTermMonths && m <= p.maxTermMonths)
-        .toList();
-    if (list.length >= 4) return list.take(6).toList();
-    if (list.isEmpty) {
-      return p.minTermMonths == p.maxTermMonths
-          ? [p.minTermMonths]
-          : [p.minTermMonths, p.maxTermMonths];
-    }
-    return list;
+  List<int> _quickTermPresetMonths() =>
+      CreditLineParamsRegistry.quickTermPresetsForLine(_selectedCreditType);
+
+  void _setTermMonths(int months) {
+    setState(() {
+      _termMonths = CreditLineParamsRegistry.snapTermMonths(months, _lineParams);
+      final max = _maxCredit;
+      final maxSlider = max > 0 ? max * 2 : 0.0;
+      if (_customAmount > maxSlider) _customAmount = maxSlider;
+    });
   }
+
+  bool get _paymentExceedsCapacity =>
+      _availableCapacity > 0 && _monthlyPayment > _availableCapacity;
 
   Future<void> _load() async {
     if (widget.profileId != null) {
@@ -268,6 +270,39 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
               ],
             ),
           ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.95, 0.95)),
+          if (_paymentExceedsCapacity) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.riskHigh.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.riskHigh.withOpacity(0.25)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      color: AppColors.riskHigh, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'La cuota estimada (${AppFormatters.currency(_monthlyPayment)}) '
+                      'supera tu capacidad disponible '
+                      '(${AppFormatters.currency(_availableCapacity)}). '
+                      'Ajusta monto o plazo.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.riskHigh,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           // Tipo de crédito
           Text('Tipo de crédito', style: Theme.of(context).textTheme.titleMedium),
@@ -404,15 +439,7 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
                   divisions: ((_lineParams.maxTermMonths - _lineParams.minTermMonths) / 6)
                       .clamp(1, 200)
                       .toInt(),
-                  onChanged: (v) => setState(() {
-                    _termMonths = v.round().clamp(
-                      _lineParams.minTermMonths,
-                      _lineParams.maxTermMonths,
-                    );
-                    final max = _maxCredit;
-                    final maxSlider = max > 0 ? max * 2 : 0.0;
-                    if (_customAmount > maxSlider) _customAmount = maxSlider;
-                  }),
+                  onChanged: (v) => _setTermMonths(v.round()),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -464,12 +491,7 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: GestureDetector(
-                    onTap: () => setState(() {
-                      _termMonths = months;
-                      final max = _maxCredit;
-                      final maxSlider = max > 0 ? max * 2 : 0.0;
-                      if (_customAmount > maxSlider) _customAmount = maxSlider;
-                    }),
+                    onTap: () => _setTermMonths(months),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(
@@ -485,7 +507,7 @@ class _SimulatorScreenState extends ConsumerState<SimulatorScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          months >= 12 ? '${months ~/ 12}A' : '${months}M',
+                          CreditLineParamsRegistry.presetLabel(months),
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,

@@ -69,6 +69,9 @@ class EvaluationsHistoryScreen extends ConsumerWidget {
                           _tag('Endeudamiento: ${(p.debtLevel * 100).toStringAsFixed(1)}%'),
                           _tag('Estado: ${p.caseStatus}'),
                           _tag('Actividad: ${p.economicActivity}'),
+                          if (p.desiredCreditType != null &&
+                              p.desiredCreditType!.isNotEmpty)
+                            _tag('Producto: ${p.desiredCreditType}'),
                         ],
                       ),
                       const SizedBox(height: 12),

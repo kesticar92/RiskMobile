@@ -9,6 +9,33 @@ class AppConstants {
   static const int scoreRiskMedium = 60;
   static const int scoreRiskHigh = 40;
 
+  /// RF06: límites de validación en entrevista.
+  static const int maxSeniorityMonths = 600;
+  static const int maxMonthlyIncome = 100000000;
+
+  /// RF18: atajos globales de plazo (filtrados por línea en el simulador).
+  static const List<int> globalTermPresetsMonths = [6, 12, 24, 36, 60, 84];
+
+  static String riskLabelForScore(int score) {
+    if (score >= scoreRiskLow) return 'Riesgo Bajo';
+    if (score >= scoreRiskMedium) return 'Riesgo Medio';
+    if (score >= scoreRiskHigh) return 'Riesgo Alto';
+    return 'Riesgo Muy Alto';
+  }
+
+  static String riskBandDescription(int score) {
+    if (score >= scoreRiskLow) {
+      return 'Perfil favorable para evaluación crediticia.';
+    }
+    if (score >= scoreRiskMedium) {
+      return 'Perfil moderado; conviene mejorar capacidad de pago.';
+    }
+    if (score >= scoreRiskHigh) {
+      return 'Perfil con restricciones; endeudamiento elevado.';
+    }
+    return 'Perfil crítico; revisar obligaciones antes de solicitar crédito.';
+  }
+
   // Debt capacity limit (% standard)
   static const double debtCapacityLimit = 0.40; // 40%
   static const double debtCapacityIdeal = 0.30; // 30%
@@ -58,6 +85,9 @@ class AppConstants {
 
   /// RF26: longitud máxima por mensaje en chat.
   static const int chatMessageMaxLength = 500;
+
+  /// RF-K22: texto opcional añadido a la notificación al cliente al cambiar estado.
+  static const int caseStatusClientMessageMaxLength = 280;
   static const List<String> advisorChatTemplates = [
     'Hola, revisé tu caso. Por favor comparte los documentos pendientes para continuar.',
     'Tu caso está en análisis. Te actualizaré apenas tenga novedades.',

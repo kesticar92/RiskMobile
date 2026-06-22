@@ -137,6 +137,16 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
                   label: p.riskLabel,
                   size: 140,
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  AppConstants.riskBandDescription(p.riskScore),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.scoreColor(p.riskScore),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -166,6 +176,32 @@ class _CalculatorScreenState extends ConsumerState<CalculatorScreen> {
               ],
             ),
           ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2),
+          const SizedBox(height: 16),
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Actividad económica (entrevista)',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 10),
+                _ActivityInfoRow(label: 'Actividad', value: p.economicActivity),
+                if (p.contractType != null && p.contractType!.isNotEmpty)
+                  _ActivityInfoRow(
+                      label: 'Contrato', value: p.contractType!),
+                _ActivityInfoRow(
+                    label: 'Antigüedad', value: '${p.seniorityMonths} meses'),
+                _ActivityInfoRow(
+                  label: 'Ingresos mensuales',
+                  value: AppFormatters.currency(p.monthlyIncome),
+                ),
+                if (p.desiredCreditType != null)
+                  _ActivityInfoRow(
+                    label: 'Producto de interés',
+                    value: p.desiredCreditType!,
+                  ),
+              ],
+            ),
+          ).animate().fadeIn(delay: 80.ms).slideY(begin: 0.2),
           const SizedBox(height: 16),
           // Debt level
           GlassCard(
@@ -460,6 +496,44 @@ class _BarRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ActivityInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ActivityInfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

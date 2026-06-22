@@ -39,6 +39,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   UserModel? _clientUser;
   final _advisorNoteCtrl = TextEditingController();
   final _newTagCtrl = TextEditingController();
+  /// RF-K22 — opcional en notificación al cliente al cambiar estado del caso.
+  final _optionalStatusNotifyCtrl = TextEditingController();
   List<String> _tagsDraft = [];
 
   @override
@@ -51,6 +53,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   void dispose() {
     _advisorNoteCtrl.dispose();
     _newTagCtrl.dispose();
+    _optionalStatusNotifyCtrl.dispose();
     super.dispose();
   }
 
@@ -137,8 +140,17 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       ..writeln('ID: ${p.id}')
       ..writeln('Cliente: ${p.clientName}')
       ..writeln('Estado: ${p.caseStatus}')
-      ..writeln('Actividad: ${p.economicActivity}')
-      ..writeln('Ingresos: ${AppFormatters.currency(p.monthlyIncome)}')
+      ..writeln('Actividad: ${p.economicActivity}');
+    if (p.contractType != null && p.contractType!.isNotEmpty) {
+      b.writeln('Contrato: ${p.contractType}');
+    }
+    b
+      ..writeln('Antigüedad: ${p.seniorityMonths} meses')
+      ..writeln('Ingresos: ${AppFormatters.currency(p.monthlyIncome)}');
+    if (p.desiredCreditType != null && p.desiredCreditType!.isNotEmpty) {
+      b.writeln('Producto: ${p.desiredCreditType}');
+    }
+    b
       ..writeln('Cuotas: ${AppFormatters.currency(p.totalMonthlyPayments)}')
       ..writeln('Capacidad disp.: ${AppFormatters.currency(p.availableCapacity)}')
       ..writeln('Monto deseado: ${AppFormatters.currency(p.desiredAmount)}')
@@ -304,14 +316,23 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
         changedByUid: advisorUid,
         changedByName: _advisorName,
       );
+      var notice =
+          'Tu caso cambió de "${current.caseStatus}" a "$status".';
+      final extra = _optionalStatusNotifyCtrl.text.trim();
+      if (extra.isNotEmpty) {
+        final cap = extra.length > AppConstants.caseStatusClientMessageMaxLength
+            ? extra.substring(0, AppConstants.caseStatusClientMessageMaxLength)
+            : extra;
+        notice = '$notice\n\n$cap';
+      }
       await fs.createNotification(
         userId: current.clientId,
         title: 'Actualización de tu caso',
-        message:
-            'Tu caso cambió de "${current.caseStatus}" a "$status".',
+        message: notice,
         caseId: current.id,
         type: 'case_status_changed',
       );
+      _optionalStatusNotifyCtrl.clear();
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -588,6 +609,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                             : (v) {
                                 if (v != null) _updateStatus(v);
                               },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _optionalStatusNotifyCtrl,
+                      enabled: !_updatingStatus,
+                      maxLength: AppConstants.caseStatusClientMessageMaxLength,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Mensaje opcional al cliente',
+                        hintText:
+                            'Se muestra en la notificación al cambiar el estado (vacío = solo el mensaje estándar)',
+                        alignLabelWithHint: true,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1071,6 +1105,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               ],
             ),
           ),
+          if (p.clientId.isNotEmpty)
+            IconButton(
+              tooltip: 'Chat con cliente',
+              onPressed: () => context.push(
+                AppRoutes.chat,
+                extra: {
+                  'otherUserId': p.clientId,
+                  'otherUserName': p.clientName,
+                  'caseId': p.id,
+                },
+              ),
+              icon: const Icon(Icons.chat_bubble_outline),
+            ),
           IconButton(
             tooltip: 'Copiar resumen del caso',
             onPressed: () {
